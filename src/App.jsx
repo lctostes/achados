@@ -4,7 +4,7 @@ import {
   Plus, Tag, Search, X, Link2, Trash2, Pencil,
   ChevronDown, ChevronRight, Circle, CircleSlash,
   Home, FolderPlus, ImageOff, Check, Settings, MessageSquare,
-  LogOut, Loader2, Wand2,
+  LogOut, Loader2, Wand2, Share2, Copy, RefreshCw, Eye,
 } from "lucide-react";
 
 const PALETTE = {
@@ -531,11 +531,48 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
 
 // ---------- Settings ----------
 
+function genSlug() {
+  return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
+}
+
 function SettingsScreen({ profile, onSave, onSignOut, onDone }) {
   const [firstName, setFirstName] = useState(profile.first_name || "");
   const [siteName, setSiteName] = useState(profile.site_name || "Achados");
   const [customName, setCustomName] = useState(profile.custom_name || false);
   const [saving, setSaving] = useState(false);
+  const [isPublic, setIsPublic] = useState(profile.is_public || false);
+  const [slug, setSlug] = useState(profile.public_slug || "");
+  const [shareSaving, setShareSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const shareUrl = slug ? `${window.location.origin}${window.location.pathname}?loja=${slug}` : "";
+
+  const togglePublic = async () => {
+    setShareSaving(true);
+    const next = !isPublic;
+    let useSlug = slug;
+    if (next && !useSlug) {
+      useSlug = genSlug();
+      setSlug(useSlug);
+    }
+    setIsPublic(next);
+    await onSave({ is_public: next, public_slug: useSlug });
+    setShareSaving(false);
+  };
+
+  const regenerateLink = async () => {
+    setShareSaving(true);
+    const newSlug = genSlug();
+    setSlug(newSlug);
+    await onSave({ public_slug: newSlug });
+    setShareSaving(false);
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   useEffect(() => {
     if (!customName) setSiteName(firstName.trim() ? `Achados da ${firstName.trim()}` : "Achados");
@@ -593,6 +630,54 @@ function SettingsScreen({ profile, onSave, onSignOut, onDone }) {
         Salvar
       </button>
 
+      <div className="mt-2 rounded-xl border p-4" style={{ borderColor: PALETTE.line, background: PALETTE.paper }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Share2 size={16} style={{ color: PALETTE.amberDark }} />
+            <span className="text-[14px] font-semibold" style={{ color: PALETTE.ink }}>Compartilhar meus links</span>
+          </div>
+          <button
+            onClick={togglePublic}
+            disabled={shareSaving}
+            role="switch"
+            aria-checked={isPublic}
+            className="relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60"
+            style={{ background: isPublic ? PALETTE.green : PALETTE.line }}
+          >
+            <span
+              className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform"
+              style={{ transform: isPublic ? "translateX(22px)" : "translateX(2px)" }}
+            />
+          </button>
+        </div>
+
+        <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.inkSoft }}>
+          Quem tiver o link vê seus produtos em modo de visualização — sem poder editar, adicionar ou apagar nada.
+        </p>
+
+        {isPublic && slug && (
+          <div className="mt-3">
+            <div className="flex items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: PALETTE.line, background: PALETTE.bg }}>
+              <span className="flex-1 truncate text-[12px]" style={{ color: PALETTE.ink, fontFamily: "'IBM Plex Mono', monospace" }}>
+                {shareUrl}
+              </span>
+              <button onClick={copyLink} style={{ color: copied ? PALETTE.green : PALETTE.inkSoft }}>
+                {copied ? <Check size={15} /> : <Copy size={15} />}
+              </button>
+            </div>
+            <button
+              onClick={regenerateLink}
+              disabled={shareSaving}
+              className="mt-2 flex items-center gap-1.5 text-[12px] font-medium disabled:opacity-60"
+              style={{ color: PALETTE.amberDark }}
+            >
+              <RefreshCw size={12} />
+              Gerar novo link (desativa o antigo)
+            </button>
+          </div>
+        )}
+      </div>
+
       <button
         onClick={onSignOut}
         className="mt-2 flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-[14px] font-medium"
@@ -605,9 +690,211 @@ function SettingsScreen({ profile, onSave, onSignOut, onDone }) {
   );
 }
 
+// ---------- Public read-only view ----------
+
+function PublicHangTag({ product, category, subcategory }) {
+  const [imgError, setImgError] = useState(false);
+  const fav = faviconFor(product.link);
+
+  return (
+    <div className="relative rounded-2xl border shadow-sm" style={{ background: PALETTE.paper, borderColor: PALETTE.line }}>
+      <div className="absolute -top-2 left-5 h-4 w-4 rounded-full border" style={{ background: PALETTE.bg, borderColor: PALETTE.line }} />
+      <div className="mx-4 mt-0 border-t border-dashed" style={{ borderColor: PALETTE.line, marginTop: "2px" }} />
+
+      <a href={product.link} target="_blank" rel="noopener noreferrer" className="flex gap-3 p-4">
+        <div
+          className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border"
+          style={{ borderColor: PALETTE.line, background: PALETTE.bg }}
+        >
+          {product.photo && !imgError ? (
+            <img src={product.photo} alt={product.name} className="h-full w-full object-cover" onError={() => setImgError(true)} />
+          ) : fav ? (
+            <img src={fav} alt="" className="h-7 w-7 opacity-70" />
+          ) : (
+            <ImageOff size={20} color={PALETTE.inkSoft} />
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div
+            className="text-[11px] font-semibold uppercase tracking-widest"
+            style={{ color: PALETTE.amberDark, fontFamily: "'IBM Plex Mono', monospace" }}
+          >
+            {category?.name}
+            {subcategory ? ` · ${subcategory.name}` : ""}
+          </div>
+          <h3 className="mt-0.5 text-[15px] font-semibold" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif" }}>
+            {product.name}
+          </h3>
+          <div className="mt-1 flex items-center gap-1 truncate text-[12px]" style={{ color: PALETTE.inkSoft }}>
+            <Link2 size={12} />
+            <span className="truncate">{product.link.replace(/^https?:\/\//, "")}</span>
+          </div>
+
+          {product.hashtags?.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {product.hashtags.map((h) => (
+                <span
+                  key={h}
+                  className="rounded border px-1.5 py-0.5 text-[10px] font-medium"
+                  style={{ borderColor: PALETTE.line, color: PALETTE.coral, fontFamily: "'IBM Plex Mono', monospace" }}
+                >
+                  #{h}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {product.note && (
+            <div className="mt-2 flex items-start gap-1.5">
+              <MessageSquare size={12} className="mt-0.5 shrink-0" style={{ color: PALETTE.inkSoft }} />
+              <p className="text-[12px] italic leading-snug" style={{ color: PALETTE.inkSoft }}>{product.note}</p>
+            </div>
+          )}
+
+          {!product.active && (
+            <div className="mt-2 flex items-center gap-1.5 text-[12px] font-medium" style={{ color: PALETTE.coral }}>
+              <CircleSlash size={12} />
+              Link quebrado
+            </div>
+          )}
+        </div>
+      </a>
+    </div>
+  );
+}
+
+function PublicView({ slug }) {
+  const [status, setStatus] = useState("loading"); // loading | notfound | ready
+  const [profile, setProfile] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [activeCat, setActiveCat] = useState(null);
+  const [activeSub, setActiveSub] = useState(null);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("id, site_name, is_public")
+        .eq("public_slug", slug)
+        .eq("is_public", true)
+        .maybeSingle();
+
+      if (!prof) {
+        setStatus("notfound");
+        return;
+      }
+
+      const [{ data: cats }, { data: subs }, { data: prods }] = await Promise.all([
+        supabase.from("categories").select("*").eq("user_id", prof.id).order("created_at"),
+        supabase.from("subcategories").select("*").eq("user_id", prof.id).order("created_at"),
+        supabase.from("products").select("*").eq("user_id", prof.id).order("created_at", { ascending: false }),
+      ]);
+
+      setProfile(prof);
+      setCategories((cats || []).map((c) => ({ ...c, subcategories: (subs || []).filter((s) => s.category_id === c.id) })));
+      setProducts(prods || []);
+      setStatus("ready");
+    })();
+  }, [slug]);
+
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center" style={{ background: PALETTE.bg }}>
+        <Loader2 size={24} className="animate-spin" style={{ color: PALETTE.inkSoft }} />
+      </div>
+    );
+  }
+
+  if (status === "notfound") {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-8 text-center" style={{ background: PALETTE.bg }}>
+        <Tag size={22} style={{ color: PALETTE.amber }} />
+        <h1 className="mt-3 text-[20px]" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif", fontWeight: 700 }}>
+          Link não encontrado
+        </h1>
+        <p className="mt-2 text-[13px]" style={{ color: PALETTE.inkSoft }}>
+          Esse link de compartilhamento não existe mais ou foi desativado por quem criou.
+        </p>
+      </div>
+    );
+  }
+
+  const currentCategory = categories.find((c) => c.id === activeCat);
+  const filtered = products.filter((p) => {
+    if (activeCat && p.category_id !== activeCat) return false;
+    if (activeSub && p.subcategory_id !== activeSub) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const inName = p.name.toLowerCase().includes(q);
+      const inTags = (p.hashtags || []).some((h) => h.toLowerCase().includes(q));
+      if (!inName && !inTags) return false;
+    }
+    return true;
+  });
+
+  return (
+    <div className="mx-auto flex min-h-screen max-w-md flex-col" style={{ background: PALETTE.bg, fontFamily: "'Inter', sans-serif" }}>
+      <div className="px-5 pb-3 pt-6">
+        <div className="flex items-center gap-2">
+          <Eye size={14} style={{ color: PALETTE.amber }} />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: PALETTE.amberDark, fontFamily: "'IBM Plex Mono', monospace" }}>
+            Modo visitante
+          </span>
+        </div>
+        <h1 className="mt-1 truncate text-[28px] leading-none" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif", fontWeight: 700 }}>
+          {profile?.site_name || "Achados"}
+        </h1>
+      </div>
+
+      <div className="flex-1 px-5 pb-10">
+        <div className="mb-3 flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: PALETTE.line, background: PALETTE.paper }}>
+          <Search size={15} style={{ color: PALETTE.inkSoft }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome ou hashtag"
+            className="flex-1 bg-transparent text-[14px] outline-none"
+            style={{ color: PALETTE.ink }}
+          />
+        </div>
+
+        <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+          <TagChip active={!activeCat} onClick={() => { setActiveCat(null); setActiveSub(null); }} tone="ink">Todos</TagChip>
+          {categories.map((c) => (
+            <TagChip key={c.id} active={activeCat === c.id} onClick={() => { setActiveCat(c.id); setActiveSub(null); }} tone="ink">{c.name}</TagChip>
+          ))}
+        </div>
+
+        {currentCategory?.subcategories.length > 0 && (
+          <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+            <TagChip active={!activeSub} onClick={() => setActiveSub(null)} tone="amber">Todas</TagChip>
+            {currentCategory.subcategories.map((s) => (
+              <TagChip key={s.id} active={activeSub === s.id} onClick={() => setActiveSub(s.id)} tone="amber">{s.name}</TagChip>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-4 pt-1">
+          {filtered.map((p) => {
+            const cat = categories.find((c) => c.id === p.category_id);
+            const sub = cat?.subcategories.find((s) => s.id === p.subcategory_id);
+            return <PublicHangTag key={p.id} product={p} category={cat} subcategory={sub} />;
+          })}
+          {filtered.length === 0 && (
+            <p className="py-12 text-center text-[13px]" style={{ color: PALETTE.inkSoft }}>Nenhum link encontrado.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Main App ----------
 
-export default function App() {
+function PrivateApp() {
   const [session, setSession] = useState(undefined); // undefined = loading, null = logged out
   const [profile, setProfile] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -859,4 +1146,12 @@ function NavButton({ icon: Icon, label, active, onClick }) {
       <span className="text-[10px] font-medium" style={{ color: active ? PALETTE.ink : PALETTE.inkSoft }}>{label}</span>
     </button>
   );
+}
+
+// ---------- Root: decide entre app privado e link público de visitante ----------
+
+export default function App() {
+  const slug = new URLSearchParams(window.location.search).get("loja");
+  if (slug) return <PublicView slug={slug} />;
+  return <PrivateApp />;
 }
