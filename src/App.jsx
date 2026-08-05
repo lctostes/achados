@@ -914,11 +914,12 @@ function PrivateApp() {
 
   const loadAll = async () => {
     setDataLoading(true);
+    const userId = session.user.id;
     const [{ data: prof }, { data: cats }, { data: subs }, { data: prods }] = await Promise.all([
-      supabase.from("profiles").select("*").maybeSingle(),
-      supabase.from("categories").select("*").order("created_at"),
-      supabase.from("subcategories").select("*").order("created_at"),
-      supabase.from("products").select("*").order("created_at", { ascending: false }),
+      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+      supabase.from("categories").select("*").eq("user_id", userId).order("created_at"),
+      supabase.from("subcategories").select("*").eq("user_id", userId).order("created_at"),
+      supabase.from("products").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
     ]);
     setProfile(prof || { first_name: "", site_name: "Achados", custom_name: false });
     const catsWithSubs = (cats || []).map((c) => ({
