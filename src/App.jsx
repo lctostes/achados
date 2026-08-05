@@ -5,6 +5,7 @@ import {
   ChevronDown, ChevronRight, Circle, CircleSlash,
   Home, FolderPlus, ImageOff, Check, Settings, MessageSquare,
   LogOut, Loader2, Wand2, Share2, Copy, RefreshCw, Eye,
+  MessageCircle, Send, GripVertical,
 } from "lucide-react";
 
 const PALETTE = {
@@ -148,16 +149,41 @@ function TagChip({ children, active, onClick, tone = "ink" }) {
   );
 }
 
-function HangTagCard({ product, category, subcategory, onToggleActive, onEdit, onDelete }) {
+function HangTagCard({
+  product, category, subcategory, onToggleActive, onEdit, onDelete,
+  comments = [], onAddComment, onDeleteComment,
+  draggingId, dragOverId, onDragHandleDown, onDragMove, onDragUp,
+}) {
   const [imgError, setImgError] = useState(false);
   const fav = faviconFor(product.link);
+  const isDragging = draggingId === product.id;
+  const isDragOver = dragOverId === product.id && draggingId && draggingId !== product.id;
 
   return (
-    <div className="relative rounded-2xl border shadow-sm" style={{ background: PALETTE.paper, borderColor: PALETTE.line }}>
+    <div
+      data-product-id={product.id}
+      className="relative rounded-2xl border shadow-sm transition-opacity"
+      style={{
+        background: PALETTE.paper,
+        borderColor: isDragOver ? PALETTE.amber : PALETTE.line,
+        borderWidth: isDragOver ? 2 : 1,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
       <div className="absolute -top-2 left-5 h-4 w-4 rounded-full border" style={{ background: PALETTE.bg, borderColor: PALETTE.line }} />
       <div className="mx-4 mt-0 border-t border-dashed" style={{ borderColor: PALETTE.line, marginTop: "2px" }} />
 
       <div className="flex gap-3 p-4">
+        <div
+          onPointerDown={(e) => onDragHandleDown(e, product.id)}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragUp}
+          className="flex shrink-0 items-center self-stretch pr-0.5"
+          style={{ touchAction: "none", cursor: "grab", color: PALETTE.inkSoft }}
+        >
+          <GripVertical size={16} />
+        </div>
+
         <div
           className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border"
           style={{ borderColor: PALETTE.line, background: PALETTE.bg }}
@@ -237,6 +263,89 @@ function HangTagCard({ product, category, subcategory, onToggleActive, onEdit, o
           </button>
         </div>
       </div>
+
+      <CommentsSection
+        comments={comments}
+        onAdd={(name, text) => onAddComment(product.id, name, text)}
+        onDelete={(commentId) => onDeleteComment(commentId, product.id)}
+        canDelete
+      />
+    </div>
+  );
+}
+
+// ---------- Comments ----------
+
+function CommentsSection({ comments, onAdd, onDelete, canDelete }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const submit = async () => {
+    if (!text.trim() || sending) return;
+    setSending(true);
+    await onAdd(name.trim(), text.trim());
+    setText("");
+    setSending(false);
+  };
+
+  return (
+    <div className="border-t px-4 py-2" style={{ borderColor: PALETTE.line }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 text-[12px] font-medium"
+        style={{ color: PALETTE.inkSoft }}
+      >
+        <MessageCircle size={13} />
+        {comments.length > 0 ? `${comments.length} coment${comments.length > 1 ? "ários" : "ário"}` : "Comentar"}
+      </button>
+
+      {open && (
+        <div className="mt-2 flex flex-col gap-2">
+          {comments.map((c) => (
+            <div key={c.id} className="flex items-start justify-between gap-2 rounded-lg px-2.5 py-1.5" style={{ background: PALETTE.bg }}>
+              <div className="min-w-0">
+                <span className="text-[11px] font-semibold" style={{ color: PALETTE.ink }}>{c.author_name?.trim() || "Visitante"}</span>
+                <p className="text-[12px] leading-snug" style={{ color: PALETTE.inkSoft }}>{c.text}</p>
+              </div>
+              {canDelete && (
+                <button onClick={() => onDelete(c.id)} className="shrink-0" style={{ color: PALETTE.coral }}>
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+
+          <div className="flex flex-col gap-1.5">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Seu nome (opcional)"
+              className="w-full rounded-lg border px-2.5 py-1.5 text-[12px] outline-none"
+              style={{ borderColor: PALETTE.line, background: PALETTE.paper, color: PALETTE.ink }}
+            />
+            <div className="flex gap-2">
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                placeholder="Comprei e adorei..."
+                className="flex-1 rounded-lg border px-2.5 py-1.5 text-[12px] outline-none"
+                style={{ borderColor: PALETTE.line, background: PALETTE.paper, color: PALETTE.ink }}
+              />
+              <button
+                onClick={submit}
+                disabled={!text.trim() || sending}
+                className="flex items-center justify-center rounded-lg px-2.5 disabled:opacity-40"
+                style={{ background: PALETTE.amber, color: PALETTE.paper }}
+              >
+                {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -535,7 +644,69 @@ function genSlug() {
   return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
 }
 
-function SettingsScreen({ profile, onSave, onSignOut, onDone }) {
+function CategoryShareRow({ category, onUpdate }) {
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const shareUrl = category.public_slug ? `${window.location.origin}${window.location.pathname}?loja=${category.public_slug}` : "";
+
+  const toggle = async () => {
+    setSaving(true);
+    const next = !category.is_public;
+    let slug = category.public_slug;
+    if (next && !slug) slug = genSlug();
+    await onUpdate(category.id, { is_public: next, public_slug: slug });
+    setSaving(false);
+  };
+
+  const regenerate = async () => {
+    setSaving(true);
+    await onUpdate(category.id, { public_slug: genSlug() });
+    setSaving(false);
+  };
+
+  const copy = () => {
+    navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t py-2.5 first:border-t-0 first:pt-0" style={{ borderColor: PALETTE.line }}>
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] font-medium" style={{ color: PALETTE.ink }}>{category.name}</span>
+        <button
+          onClick={toggle}
+          disabled={saving}
+          role="switch"
+          aria-checked={category.is_public}
+          className="relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-60"
+          style={{ background: category.is_public ? PALETTE.green : PALETTE.line }}
+        >
+          <span
+            className="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform"
+            style={{ transform: category.is_public ? "translateX(18px)" : "translateX(2px)" }}
+          />
+        </button>
+      </div>
+      {category.is_public && category.public_slug && (
+        <div>
+          <div className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5" style={{ borderColor: PALETTE.line, background: PALETTE.bg }}>
+            <span className="flex-1 truncate text-[11px]" style={{ color: PALETTE.ink, fontFamily: "'IBM Plex Mono', monospace" }}>{shareUrl}</span>
+            <button onClick={copy} style={{ color: copied ? PALETTE.green : PALETTE.inkSoft }}>
+              {copied ? <Check size={13} /> : <Copy size={13} />}
+            </button>
+          </div>
+          <button onClick={regenerate} disabled={saving} className="mt-1.5 flex items-center gap-1 text-[11px] font-medium disabled:opacity-60" style={{ color: PALETTE.amberDark }}>
+            <RefreshCw size={11} />
+            Gerar novo link
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SettingsScreen({ profile, categories, onUpdateCategory, onSave, onSignOut, onDone }) {
   const [firstName, setFirstName] = useState(profile.first_name || "");
   const [siteName, setSiteName] = useState(profile.site_name || "Achados");
   const [customName, setCustomName] = useState(profile.custom_name || false);
@@ -678,6 +849,23 @@ function SettingsScreen({ profile, onSave, onSignOut, onDone }) {
         )}
       </div>
 
+      {categories.length > 0 && (
+        <div className="mt-2 rounded-xl border p-4" style={{ borderColor: PALETTE.line, background: PALETTE.paper }}>
+          <div className="flex items-center gap-2">
+            <Tag size={16} style={{ color: PALETTE.amberDark }} />
+            <span className="text-[14px] font-semibold" style={{ color: PALETTE.ink }}>Compartilhar por categoria</span>
+          </div>
+          <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.inkSoft }}>
+            Crie um link separado só com os produtos de uma categoria.
+          </p>
+          <div className="mt-2">
+            {categories.map((c) => (
+              <CategoryShareRow key={c.id} category={c} onUpdate={onUpdateCategory} />
+            ))}
+          </div>
+        </div>
+      )}
+
       <button
         onClick={onSignOut}
         className="mt-2 flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-[14px] font-medium"
@@ -692,7 +880,7 @@ function SettingsScreen({ profile, onSave, onSignOut, onDone }) {
 
 // ---------- Public read-only view ----------
 
-function PublicHangTag({ product, category, subcategory }) {
+function PublicHangTag({ product, category, subcategory, comments = [], onAddComment }) {
   const [imgError, setImgError] = useState(false);
   const fav = faviconFor(product.link);
 
@@ -760,6 +948,12 @@ function PublicHangTag({ product, category, subcategory }) {
           )}
         </div>
       </a>
+
+      <CommentsSection
+        comments={comments}
+        onAdd={(name, text) => onAddComment(product.id, name, text)}
+        canDelete={false}
+      />
     </div>
   );
 }
@@ -769,6 +963,8 @@ function PublicView({ slug }) {
   const [profile, setProfile] = useState(null);
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [commentsByProduct, setCommentsByProduct] = useState({});
+  const [scopedCategoryId, setScopedCategoryId] = useState(null);
   const [activeCat, setActiveCat] = useState(null);
   const [activeSub, setActiveSub] = useState(null);
   const [search, setSearch] = useState("");
@@ -782,23 +978,69 @@ function PublicView({ slug }) {
         .eq("is_public", true)
         .maybeSingle();
 
-      if (!prof) {
+      let ownerId = null;
+      let siteName = "Achados";
+      let categoryScopeId = null;
+
+      if (prof) {
+        ownerId = prof.id;
+        siteName = prof.site_name;
+      } else {
+        const { data: cat } = await supabase
+          .from("categories")
+          .select("id, user_id, name")
+          .eq("public_slug", slug)
+          .eq("is_public", true)
+          .maybeSingle();
+        if (cat) {
+          ownerId = cat.user_id;
+          categoryScopeId = cat.id;
+          siteName = cat.name;
+        }
+      }
+
+      if (!ownerId) {
         setStatus("notfound");
         return;
       }
 
+      const categoriesQuery = categoryScopeId
+        ? supabase.from("categories").select("*").eq("id", categoryScopeId)
+        : supabase.from("categories").select("*").eq("user_id", ownerId).order("created_at");
+
       const [{ data: cats }, { data: subs }, { data: prods }] = await Promise.all([
-        supabase.from("categories").select("*").eq("user_id", prof.id).order("created_at"),
-        supabase.from("subcategories").select("*").eq("user_id", prof.id).order("created_at"),
-        supabase.from("products").select("*").eq("user_id", prof.id).order("created_at", { ascending: false }),
+        categoriesQuery,
+        supabase.from("subcategories").select("*").eq("user_id", ownerId).order("created_at"),
+        categoryScopeId
+          ? supabase.from("products").select("*").eq("user_id", ownerId).eq("category_id", categoryScopeId).order("sort_order")
+          : supabase.from("products").select("*").eq("user_id", ownerId).order("sort_order"),
       ]);
 
-      setProfile(prof);
+      setProfile({ site_name: siteName });
+      setScopedCategoryId(categoryScopeId);
+      setActiveCat(categoryScopeId);
       setCategories((cats || []).map((c) => ({ ...c, subcategories: (subs || []).filter((s) => s.category_id === c.id) })));
       setProducts(prods || []);
+
+      const productIds = (prods || []).map((p) => p.id);
+      if (productIds.length > 0) {
+        const { data: cmts } = await supabase.from("comments").select("*").in("product_id", productIds).order("created_at");
+        const map = {};
+        (cmts || []).forEach((c) => { (map[c.product_id] ||= []).push(c); });
+        setCommentsByProduct(map);
+      }
       setStatus("ready");
     })();
   }, [slug]);
+
+  const addComment = async (productId, authorName, text) => {
+    const { data } = await supabase
+      .from("comments")
+      .insert({ product_id: productId, author_name: authorName || null, text })
+      .select()
+      .single();
+    if (data) setCommentsByProduct((prev) => ({ ...prev, [productId]: [...(prev[productId] || []), data] }));
+  };
 
   if (status === "loading") {
     return (
@@ -861,12 +1103,14 @@ function PublicView({ slug }) {
           />
         </div>
 
-        <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
-          <TagChip active={!activeCat} onClick={() => { setActiveCat(null); setActiveSub(null); }} tone="ink">Todos</TagChip>
-          {categories.map((c) => (
-            <TagChip key={c.id} active={activeCat === c.id} onClick={() => { setActiveCat(c.id); setActiveSub(null); }} tone="ink">{c.name}</TagChip>
-          ))}
-        </div>
+        {!scopedCategoryId && (
+          <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+            <TagChip active={!activeCat} onClick={() => { setActiveCat(null); setActiveSub(null); }} tone="ink">Todos</TagChip>
+            {categories.map((c) => (
+              <TagChip key={c.id} active={activeCat === c.id} onClick={() => { setActiveCat(c.id); setActiveSub(null); }} tone="ink">{c.name}</TagChip>
+            ))}
+          </div>
+        )}
 
         {currentCategory?.subcategories.length > 0 && (
           <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
@@ -881,11 +1125,31 @@ function PublicView({ slug }) {
           {filtered.map((p) => {
             const cat = categories.find((c) => c.id === p.category_id);
             const sub = cat?.subcategories.find((s) => s.id === p.subcategory_id);
-            return <PublicHangTag key={p.id} product={p} category={cat} subcategory={sub} />;
+            return (
+              <PublicHangTag
+                key={p.id}
+                product={p}
+                category={cat}
+                subcategory={sub}
+                comments={commentsByProduct[p.id] || []}
+                onAddComment={addComment}
+              />
+            );
           })}
           {filtered.length === 0 && (
             <p className="py-12 text-center text-[13px]" style={{ color: PALETTE.inkSoft }}>Nenhum link encontrado.</p>
           )}
+        </div>
+
+        <div className="mt-8 border-t pt-5 text-center" style={{ borderColor: PALETTE.line }}>
+          <p className="text-[12px]" style={{ color: PALETTE.inkSoft }}>Feito com Achados</p>
+          <a
+            href={`${window.location.origin}${window.location.pathname}`}
+            className="mt-1 inline-block text-[13px] font-semibold"
+            style={{ color: PALETTE.amberDark }}
+          >
+            Crie o seu site de links grátis →
+          </a>
         </div>
       </div>
     </div>
@@ -899,12 +1163,15 @@ function PrivateApp() {
   const [profile, setProfile] = useState(null);
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [commentsByProduct, setCommentsByProduct] = useState({});
   const [dataLoading, setDataLoading] = useState(false);
   const [tab, setTab] = useState("feed");
   const [editing, setEditing] = useState(null);
   const [activeCat, setActiveCat] = useState(null);
   const [activeSub, setActiveSub] = useState(null);
   const [search, setSearch] = useState("");
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -919,7 +1186,7 @@ function PrivateApp() {
       supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
       supabase.from("categories").select("*").eq("user_id", userId).order("created_at"),
       supabase.from("subcategories").select("*").eq("user_id", userId).order("created_at"),
-      supabase.from("products").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
+      supabase.from("products").select("*").eq("user_id", userId).order("sort_order"),
     ]);
     setProfile(prof || { first_name: "", site_name: "Achados", custom_name: false });
     const catsWithSubs = (cats || []).map((c) => ({
@@ -928,6 +1195,16 @@ function PrivateApp() {
     }));
     setCategories(catsWithSubs);
     setProducts(prods || []);
+
+    const productIds = (prods || []).map((p) => p.id);
+    if (productIds.length > 0) {
+      const { data: cmts } = await supabase.from("comments").select("*").in("product_id", productIds).order("created_at");
+      const map = {};
+      (cmts || []).forEach((c) => { (map[c.product_id] ||= []).push(c); });
+      setCommentsByProduct(map);
+    } else {
+      setCommentsByProduct({});
+    }
     setDataLoading(false);
   };
 
@@ -977,11 +1254,81 @@ function PrivateApp() {
       const { id, ...rest } = prod;
       await supabase.from("products").update(rest).eq("id", id);
     } else {
-      await supabase.from("products").insert({ ...prod, user_id: userId });
+      const minOrder = products.length > 0 ? Math.min(...products.map((p) => p.sort_order)) : 0;
+      await supabase.from("products").insert({ ...prod, user_id: userId, sort_order: minOrder - 1 });
     }
     await loadAll();
     setEditing(null);
     setTab("feed");
+  };
+
+  const addComment = async (productId, authorName, text) => {
+    const { data } = await supabase
+      .from("comments")
+      .insert({ product_id: productId, author_name: authorName || null, text })
+      .select()
+      .single();
+    if (data) setCommentsByProduct((prev) => ({ ...prev, [productId]: [...(prev[productId] || []), data] }));
+  };
+
+  const deleteComment = async (commentId, productId) => {
+    setCommentsByProduct((prev) => ({ ...prev, [productId]: (prev[productId] || []).filter((c) => c.id !== commentId) }));
+    await supabase.from("comments").delete().eq("id", commentId);
+  };
+
+  const reorderProducts = async (fromId, toId) => {
+    const list = filtered;
+    const fromIdx = list.findIndex((p) => p.id === fromId);
+    const toIdx = list.findIndex((p) => p.id === toId);
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    const reordered = [...list];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+
+    const idx = reordered.findIndex((p) => p.id === fromId);
+    const prevItem = reordered[idx - 1];
+    const nextItem = reordered[idx + 1];
+    let newOrder;
+    if (prevItem && nextItem) newOrder = (prevItem.sort_order + nextItem.sort_order) / 2;
+    else if (prevItem) newOrder = prevItem.sort_order + 1;
+    else if (nextItem) newOrder = nextItem.sort_order - 1;
+    else newOrder = 0;
+
+    setProducts((prev) =>
+      prev
+        .map((p) => (p.id === fromId ? { ...p, sort_order: newOrder } : p))
+        .sort((a, b) => a.sort_order - b.sort_order)
+    );
+    await supabase.from("products").update({ sort_order: newOrder }).eq("id", fromId);
+  };
+
+  const onDragHandleDown = (e, productId) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDraggingId(productId);
+  };
+
+  const onCardPointerMove = (e) => {
+    if (!draggingId) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const card = el?.closest("[data-product-id]");
+    if (card) {
+      const overId = card.getAttribute("data-product-id");
+      if (overId !== dragOverId) setDragOverId(overId);
+    }
+  };
+
+  const onCardPointerUp = () => {
+    if (draggingId && dragOverId && draggingId !== dragOverId) {
+      reorderProducts(draggingId, dragOverId);
+    }
+    setDraggingId(null);
+    setDragOverId(null);
+  };
+
+  const updateCategoryShare = async (categoryId, updates) => {
+    await supabase.from("categories").update(updates).eq("id", categoryId);
+    setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, ...updates } : c)));
   };
 
   const addCategory = async (name) => {
@@ -1083,6 +1430,14 @@ function PrivateApp() {
                     onToggleActive={toggleActive}
                     onEdit={(prod) => { setEditing(prod); setTab("add"); }}
                     onDelete={deleteProduct}
+                    comments={commentsByProduct[p.id] || []}
+                    onAddComment={addComment}
+                    onDeleteComment={deleteComment}
+                    draggingId={draggingId}
+                    dragOverId={dragOverId}
+                    onDragHandleDown={onDragHandleDown}
+                    onDragMove={onCardPointerMove}
+                    onDragUp={onCardPointerUp}
                   />
                 );
               })}
@@ -1115,6 +1470,8 @@ function PrivateApp() {
         {!dataLoading && tab === "settings" && profile && (
           <SettingsScreen
             profile={profile}
+            categories={categories}
+            onUpdateCategory={updateCategoryShare}
             onSave={saveProfile}
             onSignOut={() => supabase.auth.signOut()}
             onDone={() => setTab("feed")}
