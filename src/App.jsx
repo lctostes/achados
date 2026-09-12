@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Circle, CircleSlash,
   Home, FolderPlus, ImageOff, Check, Settings, MessageSquare,
   LogOut, Loader2, Wand2, Share2, Copy, RefreshCw, Eye,
-  MessageCircle, Send, GripVertical, ImagePlus,
+  MessageCircle, Send, GripVertical, ImagePlus, Square,
 } from "lucide-react";
 
 const PALETTE = {
@@ -19,6 +19,29 @@ const PALETTE = {
   line: "#D8D3C7",
   green: "#5C7A5A",
 };
+
+function Avatar({ url, shape, size, fallback, className = "" }) {
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center overflow-hidden ${className}`}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: shape === "square" ? "26%" : "9999px",
+        background: "linear-gradient(155deg, #D9A24B, " + PALETTE.amberDark + ")",
+        boxShadow: `0 0 0 3px ${PALETTE.bg}, 0 0 0 4px ${PALETTE.amber}`,
+      }}
+    >
+      {url ? (
+        <img src={url} className="h-full w-full object-cover" />
+      ) : (
+        <span className="font-bold" style={{ fontSize: size * 0.34, color: PALETTE.paper, fontFamily: "'Fraunces', serif" }}>
+          {(fallback || "?").toUpperCase()}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function faviconFor(link) {
   try {
@@ -759,6 +782,7 @@ function SettingsScreen({ profile, categories, userId, onUpdateCategory, onSave,
   const [customName, setCustomName] = useState(profile.custom_name || false);
   const [bio, setBio] = useState(profile.bio || "");
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url || "");
+  const [avatarShape, setAvatarShape] = useState(profile.avatar_shape || "circle");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarErr, setAvatarErr] = useState("");
   const avatarInputRef = useRef(null);
@@ -791,6 +815,11 @@ function SettingsScreen({ profile, categories, userId, onUpdateCategory, onSave,
     } finally {
       setUploadingAvatar(false);
     }
+  };
+
+  const chooseShape = async (shape) => {
+    setAvatarShape(shape);
+    await onSave({ avatar_shape: shape });
   };
 
   const shareUrl = slug ? `${window.location.origin}${window.location.pathname}?loja=${slug}` : "";
@@ -843,18 +872,7 @@ function SettingsScreen({ profile, categories, userId, onUpdateCategory, onSave,
       <div>
         <label className="mb-1 block text-[12px] font-semibold uppercase tracking-wide" style={{ color: PALETTE.inkSoft }}>Foto do perfil</label>
         <div className="flex items-center gap-3">
-          <div
-            className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full"
-            style={{ background: "linear-gradient(155deg, #D9A24B, " + PALETTE.amberDark + ")", boxShadow: `0 0 0 3px ${PALETTE.bg}, 0 0 0 4px ${PALETTE.amber}` }}
-          >
-            {avatarUrl ? (
-              <img src={avatarUrl} className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-[20px] font-bold" style={{ color: PALETTE.paper, fontFamily: "'Fraunces', serif" }}>
-                {(firstName.trim()[0] || "?").toUpperCase()}
-              </span>
-            )}
-          </div>
+          <Avatar url={avatarUrl} shape={avatarShape} size={64} fallback={firstName.trim()[0]} />
           <input ref={avatarInputRef} type="file" accept="image/*" hidden onChange={handleAvatarFile} />
           <button
             onClick={() => avatarInputRef.current?.click()}
@@ -867,6 +885,33 @@ function SettingsScreen({ profile, categories, userId, onUpdateCategory, onSave,
           </button>
         </div>
         {avatarErr && <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.amberDark }}>{avatarErr}</p>}
+
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={() => chooseShape("circle")}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-[13px] font-medium"
+            style={{
+              borderColor: avatarShape === "circle" ? PALETTE.ink : PALETTE.line,
+              background: avatarShape === "circle" ? PALETTE.ink : "transparent",
+              color: avatarShape === "circle" ? PALETTE.paper : PALETTE.inkSoft,
+            }}
+          >
+            <Circle size={14} />
+            Redonda
+          </button>
+          <button
+            onClick={() => chooseShape("square")}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-[13px] font-medium"
+            style={{
+              borderColor: avatarShape === "square" ? PALETTE.ink : PALETTE.line,
+              background: avatarShape === "square" ? PALETTE.ink : "transparent",
+              color: avatarShape === "square" ? PALETTE.paper : PALETTE.inkSoft,
+            }}
+          >
+            <Square size={14} />
+            Quadrada
+          </button>
+        </div>
       </div>
 
       <div>
@@ -1092,7 +1137,7 @@ function PublicView({ slug }) {
     (async () => {
       const { data: prof } = await supabase
         .from("profiles")
-        .select("id, site_name, is_public, avatar_url, bio")
+        .select("id, site_name, is_public, avatar_url, avatar_shape, bio")
         .eq("public_slug", slug)
         .eq("is_public", true)
         .maybeSingle();
@@ -1100,6 +1145,7 @@ function PublicView({ slug }) {
       let ownerId = null;
       let siteName = "Achados";
       let avatarUrl = null;
+      let avatarShape = "circle";
       let bio = "";
       let categoryScopeId = null;
 
@@ -1107,6 +1153,7 @@ function PublicView({ slug }) {
         ownerId = prof.id;
         siteName = prof.site_name;
         avatarUrl = prof.avatar_url;
+        avatarShape = prof.avatar_shape || "circle";
         bio = prof.bio;
       } else {
         const { data: cat } = await supabase
@@ -1139,7 +1186,7 @@ function PublicView({ slug }) {
           : supabase.from("products").select("*").eq("user_id", ownerId).order("sort_order"),
       ]);
 
-      setProfile({ site_name: siteName, avatar_url: avatarUrl, bio });
+      setProfile({ site_name: siteName, avatar_url: avatarUrl, avatar_shape: avatarShape, bio });
       setScopedCategoryId(categoryScopeId);
       setActiveCat(categoryScopeId);
       setCategories((cats || []).map((c) => ({ ...c, subcategories: (subs || []).filter((s) => s.category_id === c.id) })));
@@ -1203,20 +1250,9 @@ function PublicView({ slug }) {
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col" style={{ background: PALETTE.bg, fontFamily: "'Inter', sans-serif" }}>
       <div className="px-5 pb-3 pt-6">
-        <div className="flex items-center gap-3.5">
-          <div
-            className="flex h-[64px] w-[64px] shrink-0 items-center justify-center overflow-hidden rounded-full"
-            style={{ background: "linear-gradient(155deg, #D9A24B, " + PALETTE.amberDark + ")", boxShadow: `0 0 0 3px ${PALETTE.bg}, 0 0 0 4px ${PALETTE.amber}` }}
-          >
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-[22px] font-bold" style={{ color: PALETTE.paper, fontFamily: "'Fraunces', serif" }}>
-                {(profile?.site_name?.[0] || "?").toUpperCase()}
-              </span>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-4">
+          <Avatar url={profile?.avatar_url} shape={profile?.avatar_shape} size={96} fallback={profile?.site_name?.[0]} />
+          <div className="min-w-0 flex-1 self-center">
             <div className="flex items-center gap-2">
               <Eye size={14} style={{ color: PALETTE.amber }} />
               <span className="truncate text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: PALETTE.amberDark, fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -1226,13 +1262,13 @@ function PublicView({ slug }) {
             <h1 className="mt-0.5 truncate text-[25px] italic leading-tight" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
               {profile?.site_name || "Achados"}
             </h1>
+            {profile?.bio && (
+              <p className="mt-1 text-[12.5px] italic leading-snug" style={{ color: PALETTE.inkSoft }}>
+                {profile.bio}
+              </p>
+            )}
           </div>
         </div>
-        {profile?.bio && (
-          <p className="mt-3 text-[12.5px] italic leading-snug" style={{ color: PALETTE.inkSoft }}>
-            {profile.bio}
-          </p>
-        )}
         <div className="mt-4 h-px" style={{ background: PALETTE.amber, opacity: 0.55 }} />
       </div>
 
@@ -1508,20 +1544,9 @@ function PrivateApp() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col" style={{ background: PALETTE.bg, fontFamily: "'Inter', sans-serif" }}>
       {/* Header */}
       <div className="px-5 pb-3 pt-6">
-        <div className="flex items-center gap-3.5">
-          <div
-            className="flex h-[64px] w-[64px] shrink-0 items-center justify-center overflow-hidden rounded-full"
-            style={{ background: "linear-gradient(155deg, #D9A24B, " + PALETTE.amberDark + ")", boxShadow: `0 0 0 3px ${PALETTE.bg}, 0 0 0 4px ${PALETTE.amber}` }}
-          >
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-[22px] font-bold" style={{ color: PALETTE.paper, fontFamily: "'Fraunces', serif" }}>
-                {(profile?.first_name?.[0] || "?").toUpperCase()}
-              </span>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-4">
+          <Avatar url={profile?.avatar_url} shape={profile?.avatar_shape} size={96} fallback={profile?.first_name?.[0]} />
+          <div className="min-w-0 flex-1 self-center">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Tag size={16} style={{ color: PALETTE.amber }} />
@@ -1536,11 +1561,11 @@ function PrivateApp() {
             <h1 className="mt-0.5 truncate text-[25px] italic leading-tight" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
               {profile?.site_name || "Achados"}
             </h1>
+            <p className="mt-1 text-[12.5px] italic leading-snug" style={{ color: PALETTE.inkSoft }}>
+              {profile?.bio || "seus links, organizados como etiquetas"}
+            </p>
           </div>
         </div>
-        <p className="mt-3 text-[12.5px] italic leading-snug" style={{ color: PALETTE.inkSoft }}>
-          {profile?.bio || "seus links, organizados como etiquetas"}
-        </p>
         <div className="mt-4 h-px" style={{ background: PALETTE.amber, opacity: 0.55 }} />
       </div>
 
