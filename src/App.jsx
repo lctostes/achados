@@ -753,15 +753,45 @@ function CategoryShareRow({ category, onUpdate }) {
   );
 }
 
-function SettingsScreen({ profile, categories, onUpdateCategory, onSave, onSignOut, onDone }) {
+function SettingsScreen({ profile, categories, userId, onUpdateCategory, onSave, onSignOut, onDone }) {
   const [firstName, setFirstName] = useState(profile.first_name || "");
   const [siteName, setSiteName] = useState(profile.site_name || "Achados");
   const [customName, setCustomName] = useState(profile.custom_name || false);
+  const [bio, setBio] = useState(profile.bio || "");
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url || "");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarErr, setAvatarErr] = useState("");
+  const avatarInputRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [isPublic, setIsPublic] = useState(profile.is_public || false);
   const [slug, setSlug] = useState(profile.public_slug || "");
   const [shareSaving, setShareSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const handleAvatarFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarErr("Escolha um arquivo de imagem.");
+      return;
+    }
+    setUploadingAvatar(true);
+    setAvatarErr("");
+    try {
+      const ext = file.name.split(".").pop().toLowerCase();
+      const path = `${userId}/avatar-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from("product-images").upload(path, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+      setAvatarUrl(data.publicUrl);
+      await onSave({ avatar_url: data.publicUrl });
+    } catch (e) {
+      setAvatarErr("Não consegui enviar a foto. Tente novamente.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const shareUrl = slug ? `${window.location.origin}${window.location.pathname}?loja=${slug}` : "";
 
@@ -803,13 +833,42 @@ function SettingsScreen({ profile, categories, onUpdateCategory, onSave, onSignO
 
   const save = async () => {
     setSaving(true);
-    await onSave({ first_name: firstName.trim(), site_name: siteName.trim() || "Achados", custom_name: customName });
+    await onSave({ first_name: firstName.trim(), site_name: siteName.trim() || "Achados", custom_name: customName, bio: bio.trim() });
     setSaving(false);
     onDone();
   };
 
   return (
     <div className="flex flex-col gap-4 pb-6">
+      <div>
+        <label className="mb-1 block text-[12px] font-semibold uppercase tracking-wide" style={{ color: PALETTE.inkSoft }}>Foto do perfil</label>
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full"
+            style={{ background: "linear-gradient(155deg, #D9A24B, " + PALETTE.amberDark + ")", boxShadow: `0 0 0 3px ${PALETTE.bg}, 0 0 0 4px ${PALETTE.amber}` }}
+          >
+            {avatarUrl ? (
+              <img src={avatarUrl} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-[20px] font-bold" style={{ color: PALETTE.paper, fontFamily: "'Fraunces', serif" }}>
+                {(firstName.trim()[0] || "?").toUpperCase()}
+              </span>
+            )}
+          </div>
+          <input ref={avatarInputRef} type="file" accept="image/*" hidden onChange={handleAvatarFile} />
+          <button
+            onClick={() => avatarInputRef.current?.click()}
+            disabled={uploadingAvatar}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium disabled:opacity-40"
+            style={{ background: PALETTE.amber, color: PALETTE.paper }}
+          >
+            {uploadingAvatar ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+            Trocar foto
+          </button>
+        </div>
+        {avatarErr && <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.amberDark }}>{avatarErr}</p>}
+      </div>
+
       <div>
         <label className="mb-1 block text-[12px] font-semibold uppercase tracking-wide" style={{ color: PALETTE.inkSoft }}>Seu primeiro nome</label>
         <input
@@ -836,6 +895,19 @@ function SettingsScreen({ profile, categories, onUpdateCategory, onSave, onSignO
         <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.inkSoft }}>
           Padrão: "Achados da {firstName.trim() || "[seu nome]"}". Você pode escrever qualquer nome aqui.
         </p>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-[12px] font-semibold uppercase tracking-wide" style={{ color: PALETTE.inkSoft }}>Descrição do site</label>
+        <textarea
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          placeholder="Ex: tudo que eu acho bom e barato, separado por categoria pra você."
+          rows={2}
+          className="w-full resize-none rounded-lg border px-3 py-2.5 text-[14px] outline-none"
+          style={{ borderColor: PALETTE.line, background: PALETTE.paper, color: PALETTE.ink }}
+        />
+        <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.inkSoft }}>Aparece embaixo do título, no topo do site.</p>
       </div>
 
       <button
@@ -1020,18 +1092,22 @@ function PublicView({ slug }) {
     (async () => {
       const { data: prof } = await supabase
         .from("profiles")
-        .select("id, site_name, is_public")
+        .select("id, site_name, is_public, avatar_url, bio")
         .eq("public_slug", slug)
         .eq("is_public", true)
         .maybeSingle();
 
       let ownerId = null;
       let siteName = "Achados";
+      let avatarUrl = null;
+      let bio = "";
       let categoryScopeId = null;
 
       if (prof) {
         ownerId = prof.id;
         siteName = prof.site_name;
+        avatarUrl = prof.avatar_url;
+        bio = prof.bio;
       } else {
         const { data: cat } = await supabase
           .from("categories")
@@ -1063,7 +1139,7 @@ function PublicView({ slug }) {
           : supabase.from("products").select("*").eq("user_id", ownerId).order("sort_order"),
       ]);
 
-      setProfile({ site_name: siteName });
+      setProfile({ site_name: siteName, avatar_url: avatarUrl, bio });
       setScopedCategoryId(categoryScopeId);
       setActiveCat(categoryScopeId);
       setCategories((cats || []).map((c) => ({ ...c, subcategories: (subs || []).filter((s) => s.category_id === c.id) })));
@@ -1127,15 +1203,37 @@ function PublicView({ slug }) {
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col" style={{ background: PALETTE.bg, fontFamily: "'Inter', sans-serif" }}>
       <div className="px-5 pb-3 pt-6">
-        <div className="flex items-center gap-2">
-          <Eye size={14} style={{ color: PALETTE.amber }} />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: PALETTE.amberDark, fontFamily: "'IBM Plex Mono', monospace" }}>
-            Modo visitante
-          </span>
+        <div className="flex items-center gap-3.5">
+          <div
+            className="flex h-[64px] w-[64px] shrink-0 items-center justify-center overflow-hidden rounded-full"
+            style={{ background: "linear-gradient(155deg, #D9A24B, " + PALETTE.amberDark + ")", boxShadow: `0 0 0 3px ${PALETTE.bg}, 0 0 0 4px ${PALETTE.amber}` }}
+          >
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-[22px] font-bold" style={{ color: PALETTE.paper, fontFamily: "'Fraunces', serif" }}>
+                {(profile?.site_name?.[0] || "?").toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <Eye size={14} style={{ color: PALETTE.amber }} />
+              <span className="truncate text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: PALETTE.amberDark, fontFamily: "'IBM Plex Mono', monospace" }}>
+                Modo visitante
+              </span>
+            </div>
+            <h1 className="mt-0.5 truncate text-[25px] italic leading-tight" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+              {profile?.site_name || "Achados"}
+            </h1>
+          </div>
         </div>
-        <h1 className="mt-1 truncate text-[28px] leading-none" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif", fontWeight: 700 }}>
-          {profile?.site_name || "Achados"}
-        </h1>
+        {profile?.bio && (
+          <p className="mt-3 text-[12.5px] italic leading-snug" style={{ color: PALETTE.inkSoft }}>
+            {profile.bio}
+          </p>
+        )}
+        <div className="mt-4 h-px" style={{ background: PALETTE.amber, opacity: 0.55 }} />
       </div>
 
       <div className="flex-1 px-5 pb-10">
@@ -1410,21 +1508,40 @@ function PrivateApp() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col" style={{ background: PALETTE.bg, fontFamily: "'Inter', sans-serif" }}>
       {/* Header */}
       <div className="px-5 pb-3 pt-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Tag size={18} style={{ color: PALETTE.amber }} />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: PALETTE.amberDark, fontFamily: "'IBM Plex Mono', monospace" }}>
-              {session.user.email}
-            </span>
+        <div className="flex items-center gap-3.5">
+          <div
+            className="flex h-[64px] w-[64px] shrink-0 items-center justify-center overflow-hidden rounded-full"
+            style={{ background: "linear-gradient(155deg, #D9A24B, " + PALETTE.amberDark + ")", boxShadow: `0 0 0 3px ${PALETTE.bg}, 0 0 0 4px ${PALETTE.amber}` }}
+          >
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-[22px] font-bold" style={{ color: PALETTE.paper, fontFamily: "'Fraunces', serif" }}>
+                {(profile?.first_name?.[0] || "?").toUpperCase()}
+              </span>
+            )}
           </div>
-          <button onClick={() => setTab("settings")} style={{ color: tab === "settings" ? PALETTE.ink : PALETTE.inkSoft }}>
-            <Settings size={18} />
-          </button>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Tag size={16} style={{ color: PALETTE.amber }} />
+                <span className="truncate text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: PALETTE.amberDark, fontFamily: "'IBM Plex Mono', monospace" }}>
+                  {session.user.email}
+                </span>
+              </div>
+              <button onClick={() => setTab("settings")} className="shrink-0" style={{ color: tab === "settings" ? PALETTE.ink : PALETTE.inkSoft }}>
+                <Settings size={18} />
+              </button>
+            </div>
+            <h1 className="mt-0.5 truncate text-[25px] italic leading-tight" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+              {profile?.site_name || "Achados"}
+            </h1>
+          </div>
         </div>
-        <h1 className="mt-1 truncate text-[28px] leading-none" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif", fontWeight: 700 }}>
-          {profile?.site_name || "Achados"}
-        </h1>
-        <p className="mt-1 text-[13px]" style={{ color: PALETTE.inkSoft }}>seus links, organizados como etiquetas</p>
+        <p className="mt-3 text-[12.5px] italic leading-snug" style={{ color: PALETTE.inkSoft }}>
+          {profile?.bio || "seus links, organizados como etiquetas"}
+        </p>
+        <div className="mt-4 h-px" style={{ background: PALETTE.amber, opacity: 0.55 }} />
       </div>
 
       {/* Content */}
@@ -1519,6 +1636,7 @@ function PrivateApp() {
           <SettingsScreen
             profile={profile}
             categories={categories}
+            userId={session.user.id}
             onUpdateCategory={updateCategoryShare}
             onSave={saveProfile}
             onSignOut={() => supabase.auth.signOut()}
