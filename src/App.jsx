@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Circle, CircleSlash,
   Home, FolderPlus, ImageOff, Check, Settings, MessageSquare,
   LogOut, Loader2, Wand2, Share2, Copy, RefreshCw, Eye,
-  MessageCircle, Send, GripVertical,
+  MessageCircle, Send, GripVertical, ImagePlus,
 } from "lucide-react";
 
 const PALETTE = {
@@ -352,7 +352,7 @@ function CommentsSection({ comments, onAdd, onDelete, canDelete }) {
 
 // ---------- Add / Edit product form ----------
 
-function ProductForm({ categories, initial, onCancel, onSave }) {
+function ProductForm({ categories, initial, userId, onCancel, onSave }) {
   const isEdit = !!initial;
   const [name, setName] = useState(initial?.name || "");
   const [link, setLink] = useState(initial?.link || "");
@@ -364,6 +364,9 @@ function ProductForm({ categories, initial, onCancel, onSave }) {
   const [fetching, setFetching] = useState(false);
   const [fetchMsg, setFetchMsg] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoErr, setPhotoErr] = useState("");
+  const fileInputRef = useRef(null);
 
   const currentCat = categories.find((c) => c.id === categoryId);
 
@@ -389,6 +392,30 @@ function ProductForm({ categories, initial, onCancel, onSave }) {
       setFetchMsg("Não consegui buscar automaticamente. Preencha à mão.");
     } finally {
       setFetching(false);
+    }
+  };
+
+  const handlePhotoFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setPhotoErr("Escolha um arquivo de imagem.");
+      return;
+    }
+    setUploadingPhoto(true);
+    setPhotoErr("");
+    try {
+      const ext = file.name.split(".").pop().toLowerCase();
+      const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await supabase.storage.from("product-images").upload(path, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+      setPhoto(data.publicUrl);
+    } catch (e) {
+      setPhotoErr("Não consegui enviar a foto. Tente novamente.");
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -454,13 +481,33 @@ function ProductForm({ categories, initial, onCancel, onSave }) {
         <label className="mb-1 block text-[12px] font-semibold uppercase tracking-wide" style={{ color: PALETTE.inkSoft }}>
           Foto (URL da imagem)
         </label>
-        <input
-          value={photo}
-          onChange={(e) => setPhoto(e.target.value)}
-          placeholder="https://.../imagem.jpg"
-          className="w-full rounded-lg border px-3 py-2.5 text-[14px] outline-none"
-          style={{ borderColor: PALETTE.line, background: PALETTE.paper, color: PALETTE.ink }}
-        />
+        <div className="flex gap-2">
+          <input
+            value={photo}
+            onChange={(e) => setPhoto(e.target.value)}
+            placeholder="https://.../imagem.jpg"
+            className="flex-1 rounded-lg border px-3 py-2.5 text-[14px] outline-none"
+            style={{ borderColor: PALETTE.line, background: PALETTE.paper, color: PALETTE.ink }}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={handlePhotoFile}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingPhoto}
+            title="Adicionar foto do dispositivo"
+            className="flex items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium disabled:opacity-40"
+            style={{ background: PALETTE.amber, color: PALETTE.paper }}
+          >
+            {uploadingPhoto ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+          </button>
+        </div>
+        {photoErr && <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.amberDark }}>{photoErr}</p>}
+        {!photoErr && <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.inkSoft }}>Se a varinha não achar a foto, use este botão para enviar uma foto do seu dispositivo.</p>}
         {photo && (
           <div className="mt-2 h-20 w-20 overflow-hidden rounded-lg border" style={{ borderColor: PALETTE.line }}>
             <img src={photo} className="h-full w-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
@@ -1452,6 +1499,7 @@ function PrivateApp() {
           <ProductForm
             categories={categories}
             initial={editing}
+            userId={session.user.id}
             onCancel={() => { setEditing(null); setTab("feed"); }}
             onSave={saveProduct}
           />
