@@ -43,6 +43,16 @@ function Avatar({ url, shape, size, fallback, className = "" }) {
   );
 }
 
+function sortByCategoryOrder(list, categories, activeCat) {
+  if (activeCat) return list;
+  const orderIndex = new Map(categories.map((c, i) => [c.id, i]));
+  return [...list].sort((a, b) => {
+    const ai = orderIndex.has(a.category_id) ? orderIndex.get(a.category_id) : Infinity;
+    const bi = orderIndex.has(b.category_id) ? orderIndex.get(b.category_id) : Infinity;
+    return ai - bi;
+  });
+}
+
 function faviconFor(link) {
   try {
     const u = new URL(link);
@@ -1235,17 +1245,21 @@ function PublicView({ slug }) {
   }
 
   const currentCategory = categories.find((c) => c.id === activeCat);
-  const filtered = products.filter((p) => {
-    if (activeCat && p.category_id !== activeCat) return false;
-    if (activeSub && p.subcategory_id !== activeSub) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      const inName = p.name.toLowerCase().includes(q);
-      const inTags = (p.hashtags || []).some((h) => h.toLowerCase().includes(q));
-      if (!inName && !inTags) return false;
-    }
-    return true;
-  });
+  const filtered = sortByCategoryOrder(
+    products.filter((p) => {
+      if (activeCat && p.category_id !== activeCat) return false;
+      if (activeSub && p.subcategory_id !== activeSub) return false;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const inName = p.name.toLowerCase().includes(q);
+        const inTags = (p.hashtags || []).some((h) => h.toLowerCase().includes(q));
+        if (!inName && !inTags) return false;
+      }
+      return true;
+    }),
+    categories,
+    activeCat
+  );
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col" style={{ background: PALETTE.bg, fontFamily: "'Inter', sans-serif" }}>
@@ -1404,17 +1418,21 @@ function PrivateApp() {
   if (!session) return <AuthScreen />;
 
   const currentCategory = categories.find((c) => c.id === activeCat);
-  const filtered = products.filter((p) => {
-    if (activeCat && p.category_id !== activeCat) return false;
-    if (activeSub && p.subcategory_id !== activeSub) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      const inName = p.name.toLowerCase().includes(q);
-      const inTags = (p.hashtags || []).some((h) => h.toLowerCase().includes(q));
-      if (!inName && !inTags) return false;
-    }
-    return true;
-  });
+  const filtered = sortByCategoryOrder(
+    products.filter((p) => {
+      if (activeCat && p.category_id !== activeCat) return false;
+      if (activeSub && p.subcategory_id !== activeSub) return false;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const inName = p.name.toLowerCase().includes(q);
+        const inTags = (p.hashtags || []).some((h) => h.toLowerCase().includes(q));
+        if (!inName && !inTags) return false;
+      }
+      return true;
+    }),
+    categories,
+    activeCat
+  );
 
   // ---- mutations ----
 
