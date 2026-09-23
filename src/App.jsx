@@ -660,46 +660,80 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
   const [dragOverSubId, setDragOverSubId] = useState(null);
 
   const onCatHandleDown = (e, catId) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
     setDraggingCatId(catId);
   };
-  const onCatPointerMove = (e) => {
+
+  const dragOverCatIdRef = useRef(null);
+  useEffect(() => {
+    dragOverCatIdRef.current = dragOverCatId;
+  }, [dragOverCatId]);
+
+  useEffect(() => {
     if (!draggingCatId) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    const row = el?.closest("[data-category-id]");
-    if (row) {
-      const overId = row.getAttribute("data-category-id");
-      if (overId !== dragOverCatId) setDragOverCatId(overId);
-    }
-  };
-  const onCatPointerUp = () => {
-    if (draggingCatId && dragOverCatId && draggingCatId !== dragOverCatId) {
-      onReorderCategory(draggingCatId, dragOverCatId);
-    }
-    setDraggingCatId(null);
-    setDragOverCatId(null);
-  };
+    const handleMove = (e) => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const row = el?.closest("[data-category-id]");
+      if (row) {
+        const overId = row.getAttribute("data-category-id");
+        setDragOverCatId((prev) => (overId !== prev ? overId : prev));
+      }
+    };
+    const handleUp = () => {
+      const overId = dragOverCatIdRef.current;
+      if (overId && draggingCatId !== overId) {
+        onReorderCategory(draggingCatId, overId);
+      }
+      setDraggingCatId(null);
+      setDragOverCatId(null);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [draggingCatId, onReorderCategory]);
 
   const onSubHandleDown = (e, categoryId, subId) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
     setDraggingSub({ categoryId, subId });
   };
-  const onSubPointerMove = (e) => {
+
+  const dragOverSubIdRef = useRef(null);
+  useEffect(() => {
+    dragOverSubIdRef.current = dragOverSubId;
+  }, [dragOverSubId]);
+
+  useEffect(() => {
     if (!draggingSub) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    const row = el?.closest("[data-sub-id]");
-    if (row && row.getAttribute("data-sub-category-id") === draggingSub.categoryId) {
-      const overId = row.getAttribute("data-sub-id");
-      if (overId !== dragOverSubId) setDragOverSubId(overId);
-    }
-  };
-  const onSubPointerUp = () => {
-    if (draggingSub && dragOverSubId && draggingSub.subId !== dragOverSubId) {
-      onReorderSub(draggingSub.categoryId, draggingSub.subId, dragOverSubId);
-    }
-    setDraggingSub(null);
-    setDragOverSubId(null);
-  };
+    const handleMove = (e) => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const row = el?.closest("[data-sub-id]");
+      if (row && row.getAttribute("data-sub-category-id") === draggingSub.categoryId) {
+        const overId = row.getAttribute("data-sub-id");
+        setDragOverSubId((prev) => (overId !== prev ? overId : prev));
+      }
+    };
+    const handleUp = () => {
+      const overId = dragOverSubIdRef.current;
+      if (overId && draggingSub.subId !== overId) {
+        onReorderSub(draggingSub.categoryId, draggingSub.subId, overId);
+      }
+      setDraggingSub(null);
+      setDragOverSubId(null);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [draggingSub, onReorderSub]);
 
   return (
     <div className="flex flex-col gap-4 pb-6">
@@ -742,8 +776,6 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
                 <div className="flex flex-1 items-center gap-1 min-w-0">
                   <div
                     onPointerDown={(e) => onCatHandleDown(e, c.id)}
-                    onPointerMove={onCatPointerMove}
-                    onPointerUp={onCatPointerUp}
                     className="flex h-11 w-11 shrink-0 items-center justify-center"
                     style={{
                       touchAction: "none",
@@ -786,8 +818,6 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
                           <div className="flex min-w-0 flex-1 items-center gap-1">
                             <div
                               onPointerDown={(e) => onSubHandleDown(e, c.id, s.id)}
-                              onPointerMove={onSubPointerMove}
-                              onPointerUp={onSubPointerUp}
                               className="flex h-10 w-10 shrink-0 items-center justify-center"
                               style={{
                                 touchAction: "none",
