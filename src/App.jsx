@@ -738,18 +738,25 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
                 opacity: isDragging ? 0.5 : 1,
               }}
             >
-              <div className="flex w-full items-center justify-between px-4 py-3">
-                <div className="flex flex-1 items-center gap-2 min-w-0">
+              <div className="flex w-full items-center justify-between py-1 pl-1 pr-4">
+                <div className="flex flex-1 items-center gap-1 min-w-0">
                   <div
                     onPointerDown={(e) => onCatHandleDown(e, c.id)}
                     onPointerMove={onCatPointerMove}
                     onPointerUp={onCatPointerUp}
-                    className="shrink-0"
-                    style={{ touchAction: "none", cursor: "grab", color: PALETTE.inkSoft }}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center"
+                    style={{
+                      touchAction: "none",
+                      cursor: "grab",
+                      color: PALETTE.inkSoft,
+                      userSelect: "none",
+                      WebkitUserSelect: "none",
+                      WebkitTouchCallout: "none",
+                    }}
                   >
-                    <GripVertical size={16} />
+                    <GripVertical size={18} />
                   </div>
-                  <button onClick={() => setExpanded((p) => ({ ...p, [c.id]: !p[c.id] }))} className="flex flex-1 items-center gap-2 text-left min-w-0">
+                  <button onClick={() => setExpanded((p) => ({ ...p, [c.id]: !p[c.id] }))} className="flex flex-1 items-center gap-2 py-2 text-left min-w-0">
                     {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     <span className="truncate text-[15px] font-semibold" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif" }}>{c.name}</span>
                     <span className="shrink-0 text-[12px]" style={{ color: PALETTE.inkSoft }}>({c.subcategories.length})</span>
@@ -769,24 +776,31 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
                           key={s.id}
                           data-sub-id={s.id}
                           data-sub-category-id={c.id}
-                          className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 transition-opacity"
+                          className="flex items-center justify-between gap-2 rounded-lg border py-1 pl-1 pr-2.5 transition-opacity"
                           style={{
                             borderColor: isSubDragOver ? PALETTE.amber : PALETTE.line,
                             borderWidth: isSubDragOver ? 2 : 1,
                             opacity: isSubDragging ? 0.5 : 1,
                           }}
                         >
-                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <div className="flex min-w-0 flex-1 items-center gap-1">
                             <div
                               onPointerDown={(e) => onSubHandleDown(e, c.id, s.id)}
                               onPointerMove={onSubPointerMove}
                               onPointerUp={onSubPointerUp}
-                              className="shrink-0"
-                              style={{ touchAction: "none", cursor: "grab", color: PALETTE.inkSoft }}
+                              className="flex h-10 w-10 shrink-0 items-center justify-center"
+                              style={{
+                                touchAction: "none",
+                                cursor: "grab",
+                                color: PALETTE.inkSoft,
+                                userSelect: "none",
+                                WebkitUserSelect: "none",
+                                WebkitTouchCallout: "none",
+                              }}
                             >
-                              <GripVertical size={14} />
+                              <GripVertical size={16} />
                             </div>
-                            <span className="truncate text-[13px]" style={{ color: PALETTE.ink }}>{s.name}</span>
+                            <span className="truncate py-1.5 text-[13px]" style={{ color: PALETTE.ink }}>{s.name}</span>
                           </div>
                           <X size={13} className="shrink-0 cursor-pointer" style={{ color: PALETTE.coral }} onClick={() => onDeleteSub(c.id, s.id)} />
                         </div>
