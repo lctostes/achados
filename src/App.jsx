@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "./lib/supabase";
 import {
   Plus, Tag, Search, X, Link2, Trash2, Pencil,
-  ChevronDown, ChevronRight, Circle, CircleSlash,
+  ChevronDown, ChevronRight, ChevronUp, Circle, CircleSlash,
   Home, FolderPlus, ImageOff, Check, Settings, MessageSquare,
   LogOut, Loader2, Wand2, Share2, Copy, RefreshCw, Eye,
   MessageCircle, Send, GripVertical, ImagePlus, Square,
@@ -41,6 +41,19 @@ function Avatar({ url, shape, size, fallback, className = "" }) {
       )}
     </div>
   );
+}
+
+function moveOrder(list, fromIdx, toIdx) {
+  const reordered = [...list];
+  const [moved] = reordered.splice(fromIdx, 1);
+  reordered.splice(toIdx, 0, moved);
+  const idx = toIdx;
+  const prevItem = reordered[idx - 1];
+  const nextItem = reordered[idx + 1];
+  if (prevItem && nextItem) return (prevItem.sort_order + nextItem.sort_order) / 2;
+  if (prevItem) return prevItem.sort_order + 1;
+  if (nextItem) return nextItem.sort_order - 1;
+  return 0;
 }
 
 function sortByCategoryOrder(list, categories, activeCat, activeSub) {
@@ -637,7 +650,7 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
 
 // ---------- Category management ----------
 
-function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSub, onDeleteSub }) {
+function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSub, onDeleteSub, onMoveCategory, onMoveSub }) {
   const [newCat, setNewCat] = useState("");
   const [expanded, setExpanded] = useState({});
   const [subInputs, setSubInputs] = useState({});
@@ -663,27 +676,43 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
       </div>
 
       <div className="flex flex-col gap-3">
-        {categories.map((c) => {
+        {categories.map((c, ci) => {
           const isOpen = !!expanded[c.id];
           return (
             <div key={c.id} className="rounded-xl border" style={{ borderColor: PALETTE.line, background: PALETTE.paper }}>
-              <button onClick={() => setExpanded((p) => ({ ...p, [c.id]: !p[c.id] }))} className="flex w-full items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-2">
+              <div className="flex w-full items-center justify-between px-4 py-3">
+                <button onClick={() => setExpanded((p) => ({ ...p, [c.id]: !p[c.id] }))} className="flex flex-1 items-center gap-2 text-left">
                   {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   <span className="text-[15px] font-semibold" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif" }}>{c.name}</span>
                   <span className="text-[12px]" style={{ color: PALETTE.inkSoft }}>({c.subcategories.length})</span>
+                </button>
+                <div className="flex items-center gap-2.5">
+                  <button disabled={ci === 0} onClick={() => onMoveCategory(c.id, "up")} style={{ color: PALETTE.inkSoft }} className="disabled:opacity-25">
+                    <ChevronUp size={16} />
+                  </button>
+                  <button disabled={ci === categories.length - 1} onClick={() => onMoveCategory(c.id, "down")} style={{ color: PALETTE.inkSoft }} className="disabled:opacity-25">
+                    <ChevronDown size={16} />
+                  </button>
+                  <Trash2 size={15} style={{ color: PALETTE.coral }} onClick={() => onDeleteCategory(c.id)} />
                 </div>
-                <Trash2 size={15} style={{ color: PALETTE.coral }} onClick={(e) => { e.stopPropagation(); onDeleteCategory(c.id); }} />
-              </button>
+              </div>
 
               {isOpen && (
                 <div className="border-t px-4 py-3" style={{ borderColor: PALETTE.line }}>
-                  <div className="flex flex-wrap gap-2">
-                    {c.subcategories.map((s) => (
-                      <span key={s.id} className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px]" style={{ borderColor: PALETTE.line, color: PALETTE.ink }}>
-                        {s.name}
-                        <X size={11} className="cursor-pointer" style={{ color: PALETTE.coral }} onClick={() => onDeleteSub(c.id, s.id)} />
-                      </span>
+                  <div className="flex flex-col gap-1.5">
+                    {c.subcategories.map((s, si) => (
+                      <div key={s.id} className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5" style={{ borderColor: PALETTE.line }}>
+                        <span className="text-[13px]" style={{ color: PALETTE.ink }}>{s.name}</span>
+                        <div className="flex items-center gap-2">
+                          <button disabled={si === 0} onClick={() => onMoveSub(c.id, s.id, "up")} style={{ color: PALETTE.inkSoft }} className="disabled:opacity-25">
+                            <ChevronUp size={14} />
+                          </button>
+                          <button disabled={si === c.subcategories.length - 1} onClick={() => onMoveSub(c.id, s.id, "down")} style={{ color: PALETTE.inkSoft }} className="disabled:opacity-25">
+                            <ChevronDown size={14} />
+                          </button>
+                          <X size={13} className="cursor-pointer" style={{ color: PALETTE.coral }} onClick={() => onDeleteSub(c.id, s.id)} />
+                        </div>
+                      </div>
                     ))}
                   </div>
                   <div className="mt-2 flex gap-2">
@@ -1194,11 +1223,11 @@ function PublicView({ slug }) {
 
       const categoriesQuery = categoryScopeId
         ? supabase.from("categories").select("*").eq("id", categoryScopeId)
-        : supabase.from("categories").select("*").eq("user_id", ownerId).order("created_at");
+        : supabase.from("categories").select("*").eq("user_id", ownerId).order("sort_order");
 
       const [{ data: cats }, { data: subs }, { data: prods }] = await Promise.all([
         categoriesQuery,
-        supabase.from("subcategories").select("*").eq("user_id", ownerId).order("created_at"),
+        supabase.from("subcategories").select("*").eq("user_id", ownerId).order("sort_order"),
         categoryScopeId
           ? supabase.from("products").select("*").eq("user_id", ownerId).eq("category_id", categoryScopeId).order("sort_order")
           : supabase.from("products").select("*").eq("user_id", ownerId).order("sort_order"),
@@ -1388,8 +1417,8 @@ function PrivateApp() {
     const userId = session.user.id;
     const [{ data: prof }, { data: cats }, { data: subs }, { data: prods }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
-      supabase.from("categories").select("*").eq("user_id", userId).order("created_at"),
-      supabase.from("subcategories").select("*").eq("user_id", userId).order("created_at"),
+      supabase.from("categories").select("*").eq("user_id", userId).order("sort_order"),
+      supabase.from("subcategories").select("*").eq("user_id", userId).order("sort_order"),
       supabase.from("products").select("*").eq("user_id", userId).order("sort_order"),
     ]);
     setProfile(prof || { first_name: "", site_name: "Achados", custom_name: false });
@@ -1542,7 +1571,8 @@ function PrivateApp() {
 
   const addCategory = async (name) => {
     const userId = session.user.id;
-    const { data } = await supabase.from("categories").insert({ name, user_id: userId }).select().single();
+    const maxOrder = categories.length > 0 ? Math.max(...categories.map((c) => c.sort_order ?? 0)) : 0;
+    const { data } = await supabase.from("categories").insert({ name, user_id: userId, sort_order: maxOrder + 1 }).select().single();
     if (data) setCategories((prev) => [...prev, { ...data, subcategories: [] }]);
   };
 
@@ -1551,15 +1581,50 @@ function PrivateApp() {
     await supabase.from("categories").delete().eq("id", id);
   };
 
+  const moveCategory = async (id, direction) => {
+    const idx = categories.findIndex((c) => c.id === id);
+    const toIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (idx === -1 || toIdx < 0 || toIdx >= categories.length) return;
+    const newOrder = moveOrder(categories, idx, toIdx);
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, sort_order: newOrder } : c)).sort((a, b) => a.sort_order - b.sort_order)
+    );
+    await supabase.from("categories").update({ sort_order: newOrder }).eq("id", id);
+  };
+
   const addSub = async (categoryId, name) => {
     const userId = session.user.id;
-    const { data } = await supabase.from("subcategories").insert({ name, category_id: categoryId, user_id: userId }).select().single();
+    const cat = categories.find((c) => c.id === categoryId);
+    const maxOrder = cat && cat.subcategories.length > 0 ? Math.max(...cat.subcategories.map((s) => s.sort_order ?? 0)) : 0;
+    const { data } = await supabase.from("subcategories").insert({ name, category_id: categoryId, user_id: userId, sort_order: maxOrder + 1 }).select().single();
     if (data) setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, subcategories: [...c.subcategories, data] } : c)));
   };
 
   const deleteSub = async (categoryId, subId) => {
     setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, subcategories: c.subcategories.filter((s) => s.id !== subId) } : c)));
     await supabase.from("subcategories").delete().eq("id", subId);
+  };
+
+  const moveSub = async (categoryId, subId, direction) => {
+    const cat = categories.find((c) => c.id === categoryId);
+    if (!cat) return;
+    const idx = cat.subcategories.findIndex((s) => s.id === subId);
+    const toIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (idx === -1 || toIdx < 0 || toIdx >= cat.subcategories.length) return;
+    const newOrder = moveOrder(cat.subcategories, idx, toIdx);
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === categoryId
+          ? {
+              ...c,
+              subcategories: c.subcategories
+                .map((s) => (s.id === subId ? { ...s, sort_order: newOrder } : s))
+                .sort((a, b) => a.sort_order - b.sort_order),
+            }
+          : c
+      )
+    );
+    await supabase.from("subcategories").update({ sort_order: newOrder }).eq("id", subId);
   };
 
   const saveProfile = async (updates) => {
@@ -1680,8 +1745,10 @@ function PrivateApp() {
             categories={categories}
             onAddCategory={addCategory}
             onDeleteCategory={deleteCategory}
+            onMoveCategory={moveCategory}
             onAddSub={addSub}
             onDeleteSub={deleteSub}
+            onMoveSub={moveSub}
           />
         )}
 
