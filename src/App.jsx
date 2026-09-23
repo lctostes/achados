@@ -43,13 +43,21 @@ function Avatar({ url, shape, size, fallback, className = "" }) {
   );
 }
 
-function sortByCategoryOrder(list, categories, activeCat) {
-  if (activeCat) return list;
-  const orderIndex = new Map(categories.map((c, i) => [c.id, i]));
+function sortByCategoryOrder(list, categories, activeCat, activeSub) {
+  if (activeSub) return list;
+  const catIndex = new Map(categories.map((c, i) => [c.id, i]));
+  const subIndexByCat = new Map(categories.map((c) => [c.id, new Map((c.subcategories || []).map((s, i) => [s.id, i]))]));
   return [...list].sort((a, b) => {
-    const ai = orderIndex.has(a.category_id) ? orderIndex.get(a.category_id) : Infinity;
-    const bi = orderIndex.has(b.category_id) ? orderIndex.get(b.category_id) : Infinity;
-    return ai - bi;
+    if (!activeCat) {
+      const ai = catIndex.has(a.category_id) ? catIndex.get(a.category_id) : Infinity;
+      const bi = catIndex.has(b.category_id) ? catIndex.get(b.category_id) : Infinity;
+      if (ai !== bi) return ai - bi;
+    }
+    const aSubs = subIndexByCat.get(a.category_id);
+    const bSubs = subIndexByCat.get(b.category_id);
+    const asi = a.subcategory_id && aSubs?.has(a.subcategory_id) ? aSubs.get(a.subcategory_id) : -1;
+    const bsi = b.subcategory_id && bSubs?.has(b.subcategory_id) ? bSubs.get(b.subcategory_id) : -1;
+    return asi - bsi;
   });
 }
 
@@ -1258,7 +1266,8 @@ function PublicView({ slug }) {
       return true;
     }),
     categories,
-    activeCat
+    activeCat,
+    activeSub
   );
 
   return (
@@ -1431,7 +1440,8 @@ function PrivateApp() {
       return true;
     }),
     categories,
-    activeCat
+    activeCat,
+    activeSub
   );
 
   // ---- mutations ----
