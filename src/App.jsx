@@ -650,7 +650,7 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
 
 // ---------- Category management ----------
 
-function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSub, onDeleteSub, onReorderCategory, onReorderSub }) {
+function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSub, onDeleteSub, onReorderCategory, onReorderSub, orderDirty, savingOrder, onSaveOrder }) {
   const [newCat, setNewCat] = useState("");
   const [expanded, setExpanded] = useState({});
   const [subInputs, setSubInputs] = useState({});
@@ -660,46 +660,87 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
   const [dragOverSubId, setDragOverSubId] = useState(null);
 
   const onCatHandleDown = (e, catId) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
     setDraggingCatId(catId);
   };
-  const onCatPointerMove = (e) => {
+
+  const dragOverCatIdRef = useRef(null);
+  useEffect(() => {
+    dragOverCatIdRef.current = dragOverCatId;
+  }, [dragOverCatId]);
+
+  useEffect(() => {
     if (!draggingCatId) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    const row = el?.closest("[data-category-id]");
-    if (row) {
-      const overId = row.getAttribute("data-category-id");
-      if (overId !== dragOverCatId) setDragOverCatId(overId);
-    }
-  };
-  const onCatPointerUp = () => {
-    if (draggingCatId && dragOverCatId && draggingCatId !== dragOverCatId) {
-      onReorderCategory(draggingCatId, dragOverCatId);
-    }
-    setDraggingCatId(null);
-    setDragOverCatId(null);
-  };
+    const handleMove = (e) => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const row = el?.closest("[data-category-id]");
+      if (row) {
+        const overId = row.getAttribute("data-category-id");
+        setDragOverCatId((prev) => (overId !== prev ? overId : prev));
+      }
+    };
+    const handleUp = () => {
+      const overId = dragOverCatIdRef.current;
+      if (overId && draggingCatId !== overId) {
+        onReorderCategory(draggingCatId, overId);
+      }
+      setDraggingCatId(null);
+      setDragOverCatId(null);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [draggingCatId, onReorderCategory]);
 
   const onSubHandleDown = (e, categoryId, subId) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
     setDraggingSub({ categoryId, subId });
   };
-  const onSubPointerMove = (e) => {
+
+  const [justSaved, setJustSaved] = useState(false);
+  const handleSaveOrder = async () => {
+    await onSaveOrder();
+    setJustSaved(true);
+    setTimeout(() => setJustSaved(false), 2000);
+  };
+
+  const dragOverSubIdRef = useRef(null);
+  useEffect(() => {
+    dragOverSubIdRef.current = dragOverSubId;
+  }, [dragOverSubId]);
+
+  useEffect(() => {
     if (!draggingSub) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    const row = el?.closest("[data-sub-id]");
-    if (row && row.getAttribute("data-sub-category-id") === draggingSub.categoryId) {
-      const overId = row.getAttribute("data-sub-id");
-      if (overId !== dragOverSubId) setDragOverSubId(overId);
-    }
-  };
-  const onSubPointerUp = () => {
-    if (draggingSub && dragOverSubId && draggingSub.subId !== dragOverSubId) {
-      onReorderSub(draggingSub.categoryId, draggingSub.subId, dragOverSubId);
-    }
-    setDraggingSub(null);
-    setDragOverSubId(null);
-  };
+    const handleMove = (e) => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const row = el?.closest("[data-sub-id]");
+      if (row && row.getAttribute("data-sub-category-id") === draggingSub.categoryId) {
+        const overId = row.getAttribute("data-sub-id");
+        setDragOverSubId((prev) => (overId !== prev ? overId : prev));
+      }
+    };
+    const handleUp = () => {
+      const overId = dragOverSubIdRef.current;
+      if (overId && draggingSub.subId !== overId) {
+        onReorderSub(draggingSub.categoryId, draggingSub.subId, overId);
+      }
+      setDraggingSub(null);
+      setDragOverSubId(null);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [draggingSub, onReorderSub]);
 
   return (
     <div className="flex flex-col gap-4 pb-6">
@@ -720,6 +761,28 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
           <Plus size={18} />
         </button>
       </div>
+
+      {(orderDirty || savingOrder || justSaved) && (
+        <div
+          className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+          style={{ borderColor: PALETTE.amber, background: "rgba(201,138,44,0.08)" }}
+        >
+          <span className="text-[12.5px]" style={{ color: PALETTE.amberDark }}>
+            {savingOrder ? "Salvando ordem..." : justSaved ? "Ordem salva!" : "Você reordenou categorias/subcategorias."}
+          </span>
+          {!justSaved && (
+            <button
+              onClick={handleSaveOrder}
+              disabled={savingOrder}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold disabled:opacity-60"
+              style={{ background: PALETTE.amber, color: PALETTE.paper }}
+            >
+              {savingOrder ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              Salvar ordem
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         {categories.map((c) => {
@@ -742,8 +805,6 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
                 <div className="flex flex-1 items-center gap-1 min-w-0">
                   <div
                     onPointerDown={(e) => onCatHandleDown(e, c.id)}
-                    onPointerMove={onCatPointerMove}
-                    onPointerUp={onCatPointerUp}
                     className="flex h-11 w-11 shrink-0 items-center justify-center"
                     style={{
                       touchAction: "none",
@@ -786,8 +847,6 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
                           <div className="flex min-w-0 flex-1 items-center gap-1">
                             <div
                               onPointerDown={(e) => onSubHandleDown(e, c.id, s.id)}
-                              onPointerMove={onSubPointerMove}
-                              onPointerUp={onSubPointerUp}
                               className="flex h-10 w-10 shrink-0 items-center justify-center"
                               style={{
                                 touchAction: "none",
@@ -1497,6 +1556,8 @@ function PrivateApp() {
   const [search, setSearch] = useState("");
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
+  const [orderDirty, setOrderDirty] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -1673,7 +1734,7 @@ function PrivateApp() {
     await supabase.from("categories").delete().eq("id", id);
   };
 
-  const reorderCategories = async (fromId, toId) => {
+  const reorderCategories = (fromId, toId) => {
     const fromIdx = categories.findIndex((c) => c.id === fromId);
     const toIdx = categories.findIndex((c) => c.id === toId);
     if (fromIdx === -1 || toIdx === -1) return;
@@ -1681,7 +1742,7 @@ function PrivateApp() {
     setCategories((prev) =>
       prev.map((c) => (c.id === fromId ? { ...c, sort_order: newOrder } : c)).sort((a, b) => a.sort_order - b.sort_order)
     );
-    await supabase.from("categories").update({ sort_order: newOrder }).eq("id", fromId);
+    setOrderDirty(true);
   };
 
   const addSub = async (categoryId, name) => {
@@ -1697,7 +1758,7 @@ function PrivateApp() {
     await supabase.from("subcategories").delete().eq("id", subId);
   };
 
-  const reorderSub = async (categoryId, fromId, toId) => {
+  const reorderSub = (categoryId, fromId, toId) => {
     const cat = categories.find((c) => c.id === categoryId);
     if (!cat) return;
     const fromIdx = cat.subcategories.findIndex((s) => s.id === fromId);
@@ -1716,7 +1777,19 @@ function PrivateApp() {
           : c
       )
     );
-    await supabase.from("subcategories").update({ sort_order: newOrder }).eq("id", fromId);
+    setOrderDirty(true);
+  };
+
+  const saveCategoryOrder = async () => {
+    setSavingOrder(true);
+    await Promise.all([
+      ...categories.map((c) => supabase.from("categories").update({ sort_order: c.sort_order }).eq("id", c.id)),
+      ...categories.flatMap((c) =>
+        c.subcategories.map((s) => supabase.from("subcategories").update({ sort_order: s.sort_order }).eq("id", s.id))
+      ),
+    ]);
+    setSavingOrder(false);
+    setOrderDirty(false);
   };
 
   const saveProfile = async (updates) => {
@@ -1841,6 +1914,9 @@ function PrivateApp() {
             onAddSub={addSub}
             onDeleteSub={deleteSub}
             onReorderSub={reorderSub}
+            orderDirty={orderDirty}
+            savingOrder={savingOrder}
+            onSaveOrder={saveCategoryOrder}
           />
         )}
 
