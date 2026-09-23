@@ -43,17 +43,15 @@ function Avatar({ url, shape, size, fallback, className = "" }) {
   );
 }
 
-function moveOrder(list, fromIdx, toIdx) {
+// Reordena a lista inteira e renumera com inteiros sequenciais (1, 2, 3...).
+// Evita o problema de valores empatados (ex: itens legados todos em 0) ou
+// colunas sort_order do tipo inteiro, onde uma média de vizinhos (ex: 0.5)
+// seria arredondada e poderia colidir com um vizinho.
+function reorderWithSequence(list, fromIdx, toIdx) {
   const reordered = [...list];
   const [moved] = reordered.splice(fromIdx, 1);
   reordered.splice(toIdx, 0, moved);
-  const idx = toIdx;
-  const prevItem = reordered[idx - 1];
-  const nextItem = reordered[idx + 1];
-  if (prevItem && nextItem) return (prevItem.sort_order + nextItem.sort_order) / 2;
-  if (prevItem) return prevItem.sort_order + 1;
-  if (nextItem) return nextItem.sort_order - 1;
-  return 0;
+  return reordered.map((item, i) => ({ ...item, sort_order: i + 1 }));
 }
 
 function sortByCategoryOrder(list, categories, activeCat, activeSub) {
@@ -1738,10 +1736,7 @@ function PrivateApp() {
     const fromIdx = categories.findIndex((c) => c.id === fromId);
     const toIdx = categories.findIndex((c) => c.id === toId);
     if (fromIdx === -1 || toIdx === -1) return;
-    const newOrder = moveOrder(categories, fromIdx, toIdx);
-    setCategories((prev) =>
-      prev.map((c) => (c.id === fromId ? { ...c, sort_order: newOrder } : c)).sort((a, b) => a.sort_order - b.sort_order)
-    );
+    setCategories(reorderWithSequence(categories, fromIdx, toIdx));
     setOrderDirty(true);
   };
 
@@ -1764,19 +1759,8 @@ function PrivateApp() {
     const fromIdx = cat.subcategories.findIndex((s) => s.id === fromId);
     const toIdx = cat.subcategories.findIndex((s) => s.id === toId);
     if (fromIdx === -1 || toIdx === -1) return;
-    const newOrder = moveOrder(cat.subcategories, fromIdx, toIdx);
-    setCategories((prev) =>
-      prev.map((c) =>
-        c.id === categoryId
-          ? {
-              ...c,
-              subcategories: c.subcategories
-                .map((s) => (s.id === fromId ? { ...s, sort_order: newOrder } : s))
-                .sort((a, b) => a.sort_order - b.sort_order),
-            }
-          : c
-      )
-    );
+    const reorderedSubs = reorderWithSequence(cat.subcategories, fromIdx, toIdx);
+    setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, subcategories: reorderedSubs } : c)));
     setOrderDirty(true);
   };
 
