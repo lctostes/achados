@@ -650,7 +650,7 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
 
 // ---------- Category management ----------
 
-function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSub, onDeleteSub, onReorderCategory, onReorderSub }) {
+function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSub, onDeleteSub, onReorderCategory, onReorderSub, orderDirty, savingOrder, onSaveOrder }) {
   const [newCat, setNewCat] = useState("");
   const [expanded, setExpanded] = useState({});
   const [subInputs, setSubInputs] = useState({});
@@ -700,6 +700,13 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
   const onSubHandleDown = (e, categoryId, subId) => {
     e.preventDefault();
     setDraggingSub({ categoryId, subId });
+  };
+
+  const [justSaved, setJustSaved] = useState(false);
+  const handleSaveOrder = async () => {
+    await onSaveOrder();
+    setJustSaved(true);
+    setTimeout(() => setJustSaved(false), 2000);
   };
 
   const dragOverSubIdRef = useRef(null);
@@ -754,6 +761,28 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
           <Plus size={18} />
         </button>
       </div>
+
+      {(orderDirty || savingOrder || justSaved) && (
+        <div
+          className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+          style={{ borderColor: PALETTE.amber, background: "rgba(201,138,44,0.08)" }}
+        >
+          <span className="text-[12.5px]" style={{ color: PALETTE.amberDark }}>
+            {savingOrder ? "Salvando ordem..." : justSaved ? "Ordem salva!" : "Você reordenou categorias/subcategorias."}
+          </span>
+          {!justSaved && (
+            <button
+              onClick={handleSaveOrder}
+              disabled={savingOrder}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold disabled:opacity-60"
+              style={{ background: PALETTE.amber, color: PALETTE.paper }}
+            >
+              {savingOrder ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              Salvar ordem
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         {categories.map((c) => {
@@ -1527,6 +1556,8 @@ function PrivateApp() {
   const [search, setSearch] = useState("");
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
+  const [orderDirty, setOrderDirty] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -1703,7 +1734,7 @@ function PrivateApp() {
     await supabase.from("categories").delete().eq("id", id);
   };
 
-  const reorderCategories = async (fromId, toId) => {
+  const reorderCategories = (fromId, toId) => {
     const fromIdx = categories.findIndex((c) => c.id === fromId);
     const toIdx = categories.findIndex((c) => c.id === toId);
     if (fromIdx === -1 || toIdx === -1) return;
@@ -1711,7 +1742,7 @@ function PrivateApp() {
     setCategories((prev) =>
       prev.map((c) => (c.id === fromId ? { ...c, sort_order: newOrder } : c)).sort((a, b) => a.sort_order - b.sort_order)
     );
-    await supabase.from("categories").update({ sort_order: newOrder }).eq("id", fromId);
+    setOrderDirty(true);
   };
 
   const addSub = async (categoryId, name) => {
@@ -1727,7 +1758,7 @@ function PrivateApp() {
     await supabase.from("subcategories").delete().eq("id", subId);
   };
 
-  const reorderSub = async (categoryId, fromId, toId) => {
+  const reorderSub = (categoryId, fromId, toId) => {
     const cat = categories.find((c) => c.id === categoryId);
     if (!cat) return;
     const fromIdx = cat.subcategories.findIndex((s) => s.id === fromId);
@@ -1746,7 +1777,19 @@ function PrivateApp() {
           : c
       )
     );
-    await supabase.from("subcategories").update({ sort_order: newOrder }).eq("id", fromId);
+    setOrderDirty(true);
+  };
+
+  const saveCategoryOrder = async () => {
+    setSavingOrder(true);
+    await Promise.all([
+      ...categories.map((c) => supabase.from("categories").update({ sort_order: c.sort_order }).eq("id", c.id)),
+      ...categories.flatMap((c) =>
+        c.subcategories.map((s) => supabase.from("subcategories").update({ sort_order: s.sort_order }).eq("id", s.id))
+      ),
+    ]);
+    setSavingOrder(false);
+    setOrderDirty(false);
   };
 
   const saveProfile = async (updates) => {
@@ -1871,6 +1914,9 @@ function PrivateApp() {
             onAddSub={addSub}
             onDeleteSub={deleteSub}
             onReorderSub={reorderSub}
+            orderDirty={orderDirty}
+            savingOrder={savingOrder}
+            onSaveOrder={saveCategoryOrder}
           />
         )}
 
