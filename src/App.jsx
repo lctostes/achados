@@ -43,6 +43,19 @@ function Avatar({ url, shape, size, fallback, className = "" }) {
   );
 }
 
+function moveOrder(list, fromIdx, toIdx) {
+  const reordered = [...list];
+  const [moved] = reordered.splice(fromIdx, 1);
+  reordered.splice(toIdx, 0, moved);
+  const idx = toIdx;
+  const prevItem = reordered[idx - 1];
+  const nextItem = reordered[idx + 1];
+  if (prevItem && nextItem) return (prevItem.sort_order + nextItem.sort_order) / 2;
+  if (prevItem) return prevItem.sort_order + 1;
+  if (nextItem) return nextItem.sort_order - 1;
+  return 0;
+}
+
 function sortByCategoryOrder(list, categories, activeCat, activeSub) {
   if (activeSub) return list;
   const catIndex = new Map(categories.map((c, i) => [c.id, i]));
@@ -637,10 +650,56 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
 
 // ---------- Category management ----------
 
-function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSub, onDeleteSub }) {
+function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSub, onDeleteSub, onReorderCategory, onReorderSub }) {
   const [newCat, setNewCat] = useState("");
   const [expanded, setExpanded] = useState({});
   const [subInputs, setSubInputs] = useState({});
+  const [draggingCatId, setDraggingCatId] = useState(null);
+  const [dragOverCatId, setDragOverCatId] = useState(null);
+  const [draggingSub, setDraggingSub] = useState(null); // { categoryId, subId }
+  const [dragOverSubId, setDragOverSubId] = useState(null);
+
+  const onCatHandleDown = (e, catId) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDraggingCatId(catId);
+  };
+  const onCatPointerMove = (e) => {
+    if (!draggingCatId) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const row = el?.closest("[data-category-id]");
+    if (row) {
+      const overId = row.getAttribute("data-category-id");
+      if (overId !== dragOverCatId) setDragOverCatId(overId);
+    }
+  };
+  const onCatPointerUp = () => {
+    if (draggingCatId && dragOverCatId && draggingCatId !== dragOverCatId) {
+      onReorderCategory(draggingCatId, dragOverCatId);
+    }
+    setDraggingCatId(null);
+    setDragOverCatId(null);
+  };
+
+  const onSubHandleDown = (e, categoryId, subId) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDraggingSub({ categoryId, subId });
+  };
+  const onSubPointerMove = (e) => {
+    if (!draggingSub) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const row = el?.closest("[data-sub-id]");
+    if (row && row.getAttribute("data-sub-category-id") === draggingSub.categoryId) {
+      const overId = row.getAttribute("data-sub-id");
+      if (overId !== dragOverSubId) setDragOverSubId(overId);
+    }
+  };
+  const onSubPointerUp = () => {
+    if (draggingSub && dragOverSubId && draggingSub.subId !== dragOverSubId) {
+      onReorderSub(draggingSub.categoryId, draggingSub.subId, dragOverSubId);
+    }
+    setDraggingSub(null);
+    setDragOverSubId(null);
+  };
 
   return (
     <div className="flex flex-col gap-4 pb-6">
@@ -665,26 +724,88 @@ function CategoriesScreen({ categories, onAddCategory, onDeleteCategory, onAddSu
       <div className="flex flex-col gap-3">
         {categories.map((c) => {
           const isOpen = !!expanded[c.id];
+          const isDragging = draggingCatId === c.id;
+          const isDragOver = dragOverCatId === c.id && draggingCatId && draggingCatId !== c.id;
           return (
-            <div key={c.id} className="rounded-xl border" style={{ borderColor: PALETTE.line, background: PALETTE.paper }}>
-              <button onClick={() => setExpanded((p) => ({ ...p, [c.id]: !p[c.id] }))} className="flex w-full items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-2">
-                  {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  <span className="text-[15px] font-semibold" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif" }}>{c.name}</span>
-                  <span className="text-[12px]" style={{ color: PALETTE.inkSoft }}>({c.subcategories.length})</span>
+            <div
+              key={c.id}
+              data-category-id={c.id}
+              className="rounded-xl border transition-opacity"
+              style={{
+                borderColor: isDragOver ? PALETTE.amber : PALETTE.line,
+                borderWidth: isDragOver ? 2 : 1,
+                background: PALETTE.paper,
+                opacity: isDragging ? 0.5 : 1,
+              }}
+            >
+              <div className="flex w-full items-center justify-between py-1 pl-1 pr-4">
+                <div className="flex flex-1 items-center gap-1 min-w-0">
+                  <div
+                    onPointerDown={(e) => onCatHandleDown(e, c.id)}
+                    onPointerMove={onCatPointerMove}
+                    onPointerUp={onCatPointerUp}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center"
+                    style={{
+                      touchAction: "none",
+                      cursor: "grab",
+                      color: PALETTE.inkSoft,
+                      userSelect: "none",
+                      WebkitUserSelect: "none",
+                      WebkitTouchCallout: "none",
+                    }}
+                  >
+                    <GripVertical size={18} />
+                  </div>
+                  <button onClick={() => setExpanded((p) => ({ ...p, [c.id]: !p[c.id] }))} className="flex flex-1 items-center gap-2 py-2 text-left min-w-0">
+                    {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <span className="truncate text-[15px] font-semibold" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif" }}>{c.name}</span>
+                    <span className="shrink-0 text-[12px]" style={{ color: PALETTE.inkSoft }}>({c.subcategories.length})</span>
+                  </button>
                 </div>
-                <Trash2 size={15} style={{ color: PALETTE.coral }} onClick={(e) => { e.stopPropagation(); onDeleteCategory(c.id); }} />
-              </button>
+                <Trash2 size={15} className="shrink-0" style={{ color: PALETTE.coral }} onClick={() => onDeleteCategory(c.id)} />
+              </div>
 
               {isOpen && (
                 <div className="border-t px-4 py-3" style={{ borderColor: PALETTE.line }}>
-                  <div className="flex flex-wrap gap-2">
-                    {c.subcategories.map((s) => (
-                      <span key={s.id} className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px]" style={{ borderColor: PALETTE.line, color: PALETTE.ink }}>
-                        {s.name}
-                        <X size={11} className="cursor-pointer" style={{ color: PALETTE.coral }} onClick={() => onDeleteSub(c.id, s.id)} />
-                      </span>
-                    ))}
+                  <div className="flex flex-col gap-1.5">
+                    {c.subcategories.map((s) => {
+                      const isSubDragging = draggingSub?.subId === s.id;
+                      const isSubDragOver = dragOverSubId === s.id && draggingSub && draggingSub.subId !== s.id;
+                      return (
+                        <div
+                          key={s.id}
+                          data-sub-id={s.id}
+                          data-sub-category-id={c.id}
+                          className="flex items-center justify-between gap-2 rounded-lg border py-1 pl-1 pr-2.5 transition-opacity"
+                          style={{
+                            borderColor: isSubDragOver ? PALETTE.amber : PALETTE.line,
+                            borderWidth: isSubDragOver ? 2 : 1,
+                            opacity: isSubDragging ? 0.5 : 1,
+                          }}
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-1">
+                            <div
+                              onPointerDown={(e) => onSubHandleDown(e, c.id, s.id)}
+                              onPointerMove={onSubPointerMove}
+                              onPointerUp={onSubPointerUp}
+                              className="flex h-10 w-10 shrink-0 items-center justify-center"
+                              style={{
+                                touchAction: "none",
+                                cursor: "grab",
+                                color: PALETTE.inkSoft,
+                                userSelect: "none",
+                                WebkitUserSelect: "none",
+                                WebkitTouchCallout: "none",
+                              }}
+                            >
+                              <GripVertical size={16} />
+                            </div>
+                            <span className="truncate py-1.5 text-[13px]" style={{ color: PALETTE.ink }}>{s.name}</span>
+                          </div>
+                          <X size={13} className="shrink-0 cursor-pointer" style={{ color: PALETTE.coral }} onClick={() => onDeleteSub(c.id, s.id)} />
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="mt-2 flex gap-2">
                     <input
@@ -1194,11 +1315,11 @@ function PublicView({ slug }) {
 
       const categoriesQuery = categoryScopeId
         ? supabase.from("categories").select("*").eq("id", categoryScopeId)
-        : supabase.from("categories").select("*").eq("user_id", ownerId).order("created_at");
+        : supabase.from("categories").select("*").eq("user_id", ownerId).order("sort_order");
 
       const [{ data: cats }, { data: subs }, { data: prods }] = await Promise.all([
         categoriesQuery,
-        supabase.from("subcategories").select("*").eq("user_id", ownerId).order("created_at"),
+        supabase.from("subcategories").select("*").eq("user_id", ownerId).order("sort_order"),
         categoryScopeId
           ? supabase.from("products").select("*").eq("user_id", ownerId).eq("category_id", categoryScopeId).order("sort_order")
           : supabase.from("products").select("*").eq("user_id", ownerId).order("sort_order"),
@@ -1388,8 +1509,8 @@ function PrivateApp() {
     const userId = session.user.id;
     const [{ data: prof }, { data: cats }, { data: subs }, { data: prods }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
-      supabase.from("categories").select("*").eq("user_id", userId).order("created_at"),
-      supabase.from("subcategories").select("*").eq("user_id", userId).order("created_at"),
+      supabase.from("categories").select("*").eq("user_id", userId).order("sort_order"),
+      supabase.from("subcategories").select("*").eq("user_id", userId).order("sort_order"),
       supabase.from("products").select("*").eq("user_id", userId).order("sort_order"),
     ]);
     setProfile(prof || { first_name: "", site_name: "Achados", custom_name: false });
@@ -1542,7 +1663,8 @@ function PrivateApp() {
 
   const addCategory = async (name) => {
     const userId = session.user.id;
-    const { data } = await supabase.from("categories").insert({ name, user_id: userId }).select().single();
+    const maxOrder = categories.length > 0 ? Math.max(...categories.map((c) => c.sort_order ?? 0)) : 0;
+    const { data } = await supabase.from("categories").insert({ name, user_id: userId, sort_order: maxOrder + 1 }).select().single();
     if (data) setCategories((prev) => [...prev, { ...data, subcategories: [] }]);
   };
 
@@ -1551,15 +1673,50 @@ function PrivateApp() {
     await supabase.from("categories").delete().eq("id", id);
   };
 
+  const reorderCategories = async (fromId, toId) => {
+    const fromIdx = categories.findIndex((c) => c.id === fromId);
+    const toIdx = categories.findIndex((c) => c.id === toId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const newOrder = moveOrder(categories, fromIdx, toIdx);
+    setCategories((prev) =>
+      prev.map((c) => (c.id === fromId ? { ...c, sort_order: newOrder } : c)).sort((a, b) => a.sort_order - b.sort_order)
+    );
+    await supabase.from("categories").update({ sort_order: newOrder }).eq("id", fromId);
+  };
+
   const addSub = async (categoryId, name) => {
     const userId = session.user.id;
-    const { data } = await supabase.from("subcategories").insert({ name, category_id: categoryId, user_id: userId }).select().single();
+    const cat = categories.find((c) => c.id === categoryId);
+    const maxOrder = cat && cat.subcategories.length > 0 ? Math.max(...cat.subcategories.map((s) => s.sort_order ?? 0)) : 0;
+    const { data } = await supabase.from("subcategories").insert({ name, category_id: categoryId, user_id: userId, sort_order: maxOrder + 1 }).select().single();
     if (data) setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, subcategories: [...c.subcategories, data] } : c)));
   };
 
   const deleteSub = async (categoryId, subId) => {
     setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, subcategories: c.subcategories.filter((s) => s.id !== subId) } : c)));
     await supabase.from("subcategories").delete().eq("id", subId);
+  };
+
+  const reorderSub = async (categoryId, fromId, toId) => {
+    const cat = categories.find((c) => c.id === categoryId);
+    if (!cat) return;
+    const fromIdx = cat.subcategories.findIndex((s) => s.id === fromId);
+    const toIdx = cat.subcategories.findIndex((s) => s.id === toId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const newOrder = moveOrder(cat.subcategories, fromIdx, toIdx);
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === categoryId
+          ? {
+              ...c,
+              subcategories: c.subcategories
+                .map((s) => (s.id === fromId ? { ...s, sort_order: newOrder } : s))
+                .sort((a, b) => a.sort_order - b.sort_order),
+            }
+          : c
+      )
+    );
+    await supabase.from("subcategories").update({ sort_order: newOrder }).eq("id", fromId);
   };
 
   const saveProfile = async (updates) => {
@@ -1680,8 +1837,10 @@ function PrivateApp() {
             categories={categories}
             onAddCategory={addCategory}
             onDeleteCategory={deleteCategory}
+            onReorderCategory={reorderCategories}
             onAddSub={addSub}
             onDeleteSub={deleteSub}
+            onReorderSub={reorderSub}
           />
         )}
 
