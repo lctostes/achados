@@ -451,7 +451,9 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
       if (data?.name && !name) setName(data.name);
       if (data?.photo && !photo) setPhoto(data.photo);
       if (data?.price && !price) setPrice(data.price);
-      if (!data?.name && !data?.photo && !data?.price) setFetchMsg("Não consegui achar nome/foto/preço automaticamente. Preencha à mão.");
+      if (!data?.name && !data?.photo && !data?.price) {
+        setFetchMsg(data?.warning || "Não consegui achar nome/foto/preço automaticamente. Preencha à mão.");
+      }
     } catch (e) {
       setFetchMsg("Não consegui buscar automaticamente. Preencha à mão.");
     } finally {
