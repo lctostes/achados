@@ -261,16 +261,26 @@ function HangTagCard({
             {product.name}
           </h3>
 
-          <a
-            href={product.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-1 flex items-center gap-1 truncate text-[12px]"
-            style={{ color: PALETTE.inkSoft }}
-          >
-            <Link2 size={12} />
-            <span className="truncate">{product.link.replace(/^https?:\/\//, "")}</span>
-          </a>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <a
+              href={product.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-w-0 items-center gap-1 truncate text-[12px]"
+              style={{ color: PALETTE.inkSoft }}
+            >
+              <Link2 size={12} />
+              <span className="truncate">{product.link.replace(/^https?:\/\//, "")}</span>
+            </a>
+            {product.price && (
+              <span
+                className="shrink-0 text-[13px] font-semibold"
+                style={{ color: PALETTE.amberDark, fontFamily: "'IBM Plex Mono', monospace" }}
+              >
+                {product.price}
+              </span>
+            )}
+          </div>
 
           {product.hashtags?.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
@@ -409,6 +419,7 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
   const [name, setName] = useState(initial?.name || "");
   const [link, setLink] = useState(initial?.link || "");
   const [photo, setPhoto] = useState(initial?.photo || "");
+  const [price, setPrice] = useState(initial?.price || "");
   const [categoryId, setCategoryId] = useState(initial?.category_id || categories[0]?.id || "");
   const [subcategoryId, setSubcategoryId] = useState(initial?.subcategory_id || "");
   const [hashtagInput, setHashtagInput] = useState((initial?.hashtags || []).join(", "));
@@ -439,7 +450,10 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
       if (error) throw error;
       if (data?.name && !name) setName(data.name);
       if (data?.photo && !photo) setPhoto(data.photo);
-      if (!data?.name && !data?.photo) setFetchMsg("Não consegui achar nome/foto automaticamente. Preencha à mão.");
+      if (data?.price && !price) setPrice(data.price);
+      if (!data?.name && !data?.photo && !data?.price) {
+        setFetchMsg(data?.warning || "Não consegui achar nome/foto/preço automaticamente. Preencha à mão.");
+      }
     } catch (e) {
       setFetchMsg("Não consegui buscar automaticamente. Preencha à mão.");
     } finally {
@@ -480,6 +494,7 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
       name: name.trim(),
       link: link.trim(),
       photo: photo.trim(),
+      price: price.trim(),
       category_id: categoryId,
       subcategory_id: subcategoryId || null,
       hashtags,
@@ -513,7 +528,7 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
           </button>
         </div>
         {fetchMsg && <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.amberDark }}>{fetchMsg}</p>}
-        {!fetchMsg && <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.inkSoft }}>Toque na varinha para tentar buscar nome e foto automaticamente.</p>}
+        {!fetchMsg && <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.inkSoft }}>Toque na varinha para tentar buscar nome, foto e preço automaticamente.</p>}
       </div>
 
       <div>
@@ -524,6 +539,19 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Ex: Boné Nike Dri-FIT"
+          className="w-full rounded-lg border px-3 py-2.5 text-[14px] outline-none"
+          style={{ borderColor: PALETTE.line, background: PALETTE.paper, color: PALETTE.ink }}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-[12px] font-semibold uppercase tracking-wide" style={{ color: PALETTE.inkSoft }}>
+          Preço
+        </label>
+        <input
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          placeholder="Ex: R$ 149,90"
           className="w-full rounded-lg border px-3 py-2.5 text-[14px] outline-none"
           style={{ borderColor: PALETTE.line, background: PALETTE.paper, color: PALETTE.ink }}
         />
@@ -1274,9 +1302,19 @@ function PublicHangTag({ product, category, subcategory, comments = [], onAddCom
           <h3 className="mt-0.5 text-[15px] font-semibold" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif" }}>
             {product.name}
           </h3>
-          <div className="mt-1 flex items-center gap-1 truncate text-[12px]" style={{ color: PALETTE.inkSoft }}>
-            <Link2 size={12} />
-            <span className="truncate">{product.link.replace(/^https?:\/\//, "")}</span>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1 truncate text-[12px]" style={{ color: PALETTE.inkSoft }}>
+              <Link2 size={12} />
+              <span className="truncate">{product.link.replace(/^https?:\/\//, "")}</span>
+            </div>
+            {product.price && (
+              <span
+                className="shrink-0 text-[13px] font-semibold"
+                style={{ color: PALETTE.amberDark, fontFamily: "'IBM Plex Mono', monospace" }}
+              >
+                {product.price}
+              </span>
+            )}
           </div>
 
           {product.hashtags?.length > 0 && (
