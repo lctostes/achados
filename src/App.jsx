@@ -261,16 +261,26 @@ function HangTagCard({
             {product.name}
           </h3>
 
-          <a
-            href={product.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-1 flex items-center gap-1 truncate text-[12px]"
-            style={{ color: PALETTE.inkSoft }}
-          >
-            <Link2 size={12} />
-            <span className="truncate">{product.link.replace(/^https?:\/\//, "")}</span>
-          </a>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <a
+              href={product.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-w-0 items-center gap-1 truncate text-[12px]"
+              style={{ color: PALETTE.inkSoft }}
+            >
+              <Link2 size={12} />
+              <span className="truncate">{product.link.replace(/^https?:\/\//, "")}</span>
+            </a>
+            {product.price && (
+              <span
+                className="shrink-0 text-[13px] font-semibold"
+                style={{ color: PALETTE.amberDark, fontFamily: "'IBM Plex Mono', monospace" }}
+              >
+                {product.price}
+              </span>
+            )}
+          </div>
 
           {product.hashtags?.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
@@ -409,6 +419,7 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
   const [name, setName] = useState(initial?.name || "");
   const [link, setLink] = useState(initial?.link || "");
   const [photo, setPhoto] = useState(initial?.photo || "");
+  const [price, setPrice] = useState(initial?.price || "");
   const [categoryId, setCategoryId] = useState(initial?.category_id || categories[0]?.id || "");
   const [subcategoryId, setSubcategoryId] = useState(initial?.subcategory_id || "");
   const [hashtagInput, setHashtagInput] = useState((initial?.hashtags || []).join(", "));
@@ -439,7 +450,10 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
       if (error) throw error;
       if (data?.name && !name) setName(data.name);
       if (data?.photo && !photo) setPhoto(data.photo);
-      if (!data?.name && !data?.photo) setFetchMsg("Não consegui achar nome/foto automaticamente. Preencha à mão.");
+      if (data?.price && !price) setPrice(data.price);
+      if (!data?.name && !data?.photo && !data?.price) {
+        setFetchMsg(data?.warning || "Não consegui achar nome/foto/preço automaticamente. Preencha à mão.");
+      }
     } catch (e) {
       setFetchMsg("Não consegui buscar automaticamente. Preencha à mão.");
     } finally {
@@ -480,6 +494,7 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
       name: name.trim(),
       link: link.trim(),
       photo: photo.trim(),
+      price: price.trim(),
       category_id: categoryId,
       subcategory_id: subcategoryId || null,
       hashtags,
@@ -513,7 +528,7 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
           </button>
         </div>
         {fetchMsg && <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.amberDark }}>{fetchMsg}</p>}
-        {!fetchMsg && <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.inkSoft }}>Toque na varinha para tentar buscar nome e foto automaticamente.</p>}
+        {!fetchMsg && <p className="mt-1.5 text-[12px]" style={{ color: PALETTE.inkSoft }}>Toque na varinha para tentar buscar nome, foto e preço automaticamente.</p>}
       </div>
 
       <div>
@@ -524,6 +539,19 @@ function ProductForm({ categories, initial, userId, onCancel, onSave }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Ex: Boné Nike Dri-FIT"
+          className="w-full rounded-lg border px-3 py-2.5 text-[14px] outline-none"
+          style={{ borderColor: PALETTE.line, background: PALETTE.paper, color: PALETTE.ink }}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-[12px] font-semibold uppercase tracking-wide" style={{ color: PALETTE.inkSoft }}>
+          Preço
+        </label>
+        <input
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          placeholder="Ex: R$ 149,90"
           className="w-full rounded-lg border px-3 py-2.5 text-[14px] outline-none"
           style={{ borderColor: PALETTE.line, background: PALETTE.paper, color: PALETTE.ink }}
         />
@@ -1274,9 +1302,19 @@ function PublicHangTag({ product, category, subcategory, comments = [], onAddCom
           <h3 className="mt-0.5 text-[15px] font-semibold" style={{ color: PALETTE.ink, fontFamily: "'Fraunces', serif" }}>
             {product.name}
           </h3>
-          <div className="mt-1 flex items-center gap-1 truncate text-[12px]" style={{ color: PALETTE.inkSoft }}>
-            <Link2 size={12} />
-            <span className="truncate">{product.link.replace(/^https?:\/\//, "")}</span>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1 truncate text-[12px]" style={{ color: PALETTE.inkSoft }}>
+              <Link2 size={12} />
+              <span className="truncate">{product.link.replace(/^https?:\/\//, "")}</span>
+            </div>
+            {product.price && (
+              <span
+                className="shrink-0 text-[13px] font-semibold"
+                style={{ color: PALETTE.amberDark, fontFamily: "'IBM Plex Mono', monospace" }}
+              >
+                {product.price}
+              </span>
+            )}
           </div>
 
           {product.hashtags?.length > 0 && (
@@ -1332,7 +1370,7 @@ function PublicView({ slug }) {
   useEffect(() => {
     (async () => {
       const { data: prof } = await supabase
-        .from("profiles")
+        .from("achados_profiles")
         .select("id, site_name, is_public, avatar_url, avatar_shape, bio")
         .eq("public_slug", slug)
         .eq("is_public", true)
@@ -1353,7 +1391,7 @@ function PublicView({ slug }) {
         bio = prof.bio;
       } else {
         const { data: cat } = await supabase
-          .from("categories")
+          .from("achados_categories")
           .select("id, user_id, name")
           .eq("public_slug", slug)
           .eq("is_public", true)
@@ -1371,15 +1409,15 @@ function PublicView({ slug }) {
       }
 
       const categoriesQuery = categoryScopeId
-        ? supabase.from("categories").select("*").eq("id", categoryScopeId)
-        : supabase.from("categories").select("*").eq("user_id", ownerId).order("sort_order");
+        ? supabase.from("achados_categories").select("*").eq("id", categoryScopeId)
+        : supabase.from("achados_categories").select("*").eq("user_id", ownerId).order("sort_order");
 
       const [{ data: cats }, { data: subs }, { data: prods }] = await Promise.all([
         categoriesQuery,
-        supabase.from("subcategories").select("*").eq("user_id", ownerId).order("sort_order"),
+        supabase.from("achados_subcategories").select("*").eq("user_id", ownerId).order("sort_order"),
         categoryScopeId
-          ? supabase.from("products").select("*").eq("user_id", ownerId).eq("category_id", categoryScopeId).order("sort_order")
-          : supabase.from("products").select("*").eq("user_id", ownerId).order("sort_order"),
+          ? supabase.from("achados_products").select("*").eq("user_id", ownerId).eq("category_id", categoryScopeId).order("sort_order")
+          : supabase.from("achados_products").select("*").eq("user_id", ownerId).order("sort_order"),
       ]);
 
       setProfile({ site_name: siteName, avatar_url: avatarUrl, avatar_shape: avatarShape, bio });
@@ -1390,7 +1428,7 @@ function PublicView({ slug }) {
 
       const productIds = (prods || []).map((p) => p.id);
       if (productIds.length > 0) {
-        const { data: cmts } = await supabase.from("comments").select("*").in("product_id", productIds).order("created_at");
+        const { data: cmts } = await supabase.from("achados_comments").select("*").in("product_id", productIds).order("created_at");
         const map = {};
         (cmts || []).forEach((c) => { (map[c.product_id] ||= []).push(c); });
         setCommentsByProduct(map);
@@ -1401,7 +1439,7 @@ function PublicView({ slug }) {
 
   const addComment = async (productId, authorName, text) => {
     const { data } = await supabase
-      .from("comments")
+      .from("achados_comments")
       .insert({ product_id: productId, author_name: authorName || null, text })
       .select()
       .single();
@@ -1567,10 +1605,10 @@ function PrivateApp() {
     setDataLoading(true);
     const userId = session.user.id;
     const [{ data: prof }, { data: cats }, { data: subs }, { data: prods }] = await Promise.all([
-      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
-      supabase.from("categories").select("*").eq("user_id", userId).order("sort_order"),
-      supabase.from("subcategories").select("*").eq("user_id", userId).order("sort_order"),
-      supabase.from("products").select("*").eq("user_id", userId).order("sort_order"),
+      supabase.from("achados_profiles").select("*").eq("id", userId).maybeSingle(),
+      supabase.from("achados_categories").select("*").eq("user_id", userId).order("sort_order"),
+      supabase.from("achados_subcategories").select("*").eq("user_id", userId).order("sort_order"),
+      supabase.from("achados_products").select("*").eq("user_id", userId).order("sort_order"),
     ]);
     setProfile(prof || { first_name: "", site_name: "Achados", custom_name: false });
     const catsWithSubs = (cats || []).map((c) => ({
@@ -1582,7 +1620,7 @@ function PrivateApp() {
 
     const productIds = (prods || []).map((p) => p.id);
     if (productIds.length > 0) {
-      const { data: cmts } = await supabase.from("comments").select("*").in("product_id", productIds).order("created_at");
+      const { data: cmts } = await supabase.from("achados_comments").select("*").in("product_id", productIds).order("created_at");
       const map = {};
       (cmts || []).forEach((c) => { (map[c.product_id] ||= []).push(c); });
       setCommentsByProduct(map);
@@ -1629,22 +1667,22 @@ function PrivateApp() {
   const toggleActive = async (product) => {
     const next = !product.active;
     setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, active: next } : p)));
-    await supabase.from("products").update({ active: next }).eq("id", product.id);
+    await supabase.from("achados_products").update({ active: next }).eq("id", product.id);
   };
 
   const deleteProduct = async (product) => {
     setProducts((prev) => prev.filter((p) => p.id !== product.id));
-    await supabase.from("products").delete().eq("id", product.id);
+    await supabase.from("achados_products").delete().eq("id", product.id);
   };
 
   const saveProduct = async (prod) => {
     const userId = session.user.id;
     if (prod.id) {
       const { id, ...rest } = prod;
-      await supabase.from("products").update(rest).eq("id", id);
+      await supabase.from("achados_products").update(rest).eq("id", id);
     } else {
       const minOrder = products.length > 0 ? Math.min(...products.map((p) => p.sort_order)) : 0;
-      await supabase.from("products").insert({ ...prod, user_id: userId, sort_order: minOrder - 1 });
+      await supabase.from("achados_products").insert({ ...prod, user_id: userId, sort_order: minOrder - 1 });
     }
     await loadAll();
     setEditing(null);
@@ -1653,7 +1691,7 @@ function PrivateApp() {
 
   const addComment = async (productId, authorName, text) => {
     const { data } = await supabase
-      .from("comments")
+      .from("achados_comments")
       .insert({ product_id: productId, author_name: authorName || null, text })
       .select()
       .single();
@@ -1662,7 +1700,7 @@ function PrivateApp() {
 
   const deleteComment = async (commentId, productId) => {
     setCommentsByProduct((prev) => ({ ...prev, [productId]: (prev[productId] || []).filter((c) => c.id !== commentId) }));
-    await supabase.from("comments").delete().eq("id", commentId);
+    await supabase.from("achados_comments").delete().eq("id", commentId);
   };
 
   const reorderProducts = async (fromId, toId) => {
@@ -1689,7 +1727,7 @@ function PrivateApp() {
         .map((p) => (p.id === fromId ? { ...p, sort_order: newOrder } : p))
         .sort((a, b) => a.sort_order - b.sort_order)
     );
-    await supabase.from("products").update({ sort_order: newOrder }).eq("id", fromId);
+    await supabase.from("achados_products").update({ sort_order: newOrder }).eq("id", fromId);
   };
 
   const onDragHandleDown = (e, productId) => {
@@ -1716,20 +1754,20 @@ function PrivateApp() {
   };
 
   const updateCategoryShare = async (categoryId, updates) => {
-    await supabase.from("categories").update(updates).eq("id", categoryId);
+    await supabase.from("achados_categories").update(updates).eq("id", categoryId);
     setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, ...updates } : c)));
   };
 
   const addCategory = async (name) => {
     const userId = session.user.id;
     const maxOrder = categories.length > 0 ? Math.max(...categories.map((c) => c.sort_order ?? 0)) : 0;
-    const { data } = await supabase.from("categories").insert({ name, user_id: userId, sort_order: maxOrder + 1 }).select().single();
+    const { data } = await supabase.from("achados_categories").insert({ name, user_id: userId, sort_order: maxOrder + 1 }).select().single();
     if (data) setCategories((prev) => [...prev, { ...data, subcategories: [] }]);
   };
 
   const deleteCategory = async (id) => {
     setCategories((prev) => prev.filter((c) => c.id !== id));
-    await supabase.from("categories").delete().eq("id", id);
+    await supabase.from("achados_categories").delete().eq("id", id);
   };
 
   const reorderCategories = (fromId, toId) => {
@@ -1744,13 +1782,13 @@ function PrivateApp() {
     const userId = session.user.id;
     const cat = categories.find((c) => c.id === categoryId);
     const maxOrder = cat && cat.subcategories.length > 0 ? Math.max(...cat.subcategories.map((s) => s.sort_order ?? 0)) : 0;
-    const { data } = await supabase.from("subcategories").insert({ name, category_id: categoryId, user_id: userId, sort_order: maxOrder + 1 }).select().single();
+    const { data } = await supabase.from("achados_subcategories").insert({ name, category_id: categoryId, user_id: userId, sort_order: maxOrder + 1 }).select().single();
     if (data) setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, subcategories: [...c.subcategories, data] } : c)));
   };
 
   const deleteSub = async (categoryId, subId) => {
     setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, subcategories: c.subcategories.filter((s) => s.id !== subId) } : c)));
-    await supabase.from("subcategories").delete().eq("id", subId);
+    await supabase.from("achados_subcategories").delete().eq("id", subId);
   };
 
   const reorderSub = (categoryId, fromId, toId) => {
@@ -1767,9 +1805,9 @@ function PrivateApp() {
   const saveCategoryOrder = async () => {
     setSavingOrder(true);
     await Promise.all([
-      ...categories.map((c) => supabase.from("categories").update({ sort_order: c.sort_order }).eq("id", c.id)),
+      ...categories.map((c) => supabase.from("achados_categories").update({ sort_order: c.sort_order }).eq("id", c.id)),
       ...categories.flatMap((c) =>
-        c.subcategories.map((s) => supabase.from("subcategories").update({ sort_order: s.sort_order }).eq("id", s.id))
+        c.subcategories.map((s) => supabase.from("achados_subcategories").update({ sort_order: s.sort_order }).eq("id", s.id))
       ),
     ]);
     setSavingOrder(false);
@@ -1778,7 +1816,7 @@ function PrivateApp() {
 
   const saveProfile = async (updates) => {
     const userId = session.user.id;
-    await supabase.from("profiles").upsert({ id: userId, ...updates });
+    await supabase.from("achados_profiles").upsert({ id: userId, ...updates });
     setProfile((p) => ({ ...p, ...updates }));
   };
 
