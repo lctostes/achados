@@ -88,6 +88,7 @@ function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -108,6 +109,20 @@ function AuthScreen() {
       else setInfo("Conta criada! Se a confirmação por e-mail estiver ativa no projeto, verifique sua caixa de entrada antes de entrar.");
     }
     setLoading(false);
+  };
+
+  const submitWithGoogle = async () => {
+    setError("");
+    setInfo("");
+    setGoogleLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
+      setError(error.message);
+      setGoogleLoading(false);
+    }
   };
 
   return (
@@ -175,6 +190,31 @@ function AuthScreen() {
           >
             {loading && <Loader2 size={14} className="animate-spin" />}
             {mode === "login" ? "Entrar" : "Criar conta"}
+          </button>
+
+          <div className="my-1 flex items-center gap-2">
+            <div className="h-px flex-1" style={{ background: PALETTE.line }} />
+            <span className="text-[11px]" style={{ color: PALETTE.inkSoft }}>ou</span>
+            <div className="h-px flex-1" style={{ background: PALETTE.line }} />
+          </div>
+
+          <button
+            onClick={submitWithGoogle}
+            disabled={googleLoading}
+            className="flex items-center justify-center gap-2 rounded-lg border py-2.5 text-[14px] font-semibold disabled:opacity-60"
+            style={{ borderColor: PALETTE.line, background: PALETTE.paper, color: PALETTE.ink }}
+          >
+            {googleLoading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#FFC107" d="M43.6 20.5H42V20.5H24V27.5H35.3C33.7 31.9 29.5 35 24 35C17.4 35 12 29.6 12 23C12 16.4 17.4 11 24 11C27.1 11 29.9 12.2 32.1 14.1L37.5 8.7C34.2 5.7 29.3 4 24 4C12.9 4 4 12.9 4 24C4 35.1 12.9 44 24 44C35.1 44 44 35.1 44 24C44 22.8 43.9 21.6 43.6 20.5Z"/>
+                <path fill="#FF3D00" d="M6.3 14.7L12.9 19.5C14.6 15.6 18.9 11 24 11C27.1 11 29.9 12.2 32.1 14.1L37.5 8.7C34.2 5.7 29.3 4 24 4C16.3 4 9.7 8.3 6.3 14.7Z"/>
+                <path fill="#4CAF50" d="M24 44C29.2 44 34 42.1 37.3 39.2L31.3 34.1C29.5 35.4 27 36 24 36C18.6 36 14 32.9 12.3 28.4L5.7 33.4C9.1 39.6 16 44 24 44Z"/>
+                <path fill="#1976D2" d="M43.6 20.5H42V20.5H24V27.5H35.3C34.5 29.6 33.1 31.4 31.3 32.9L31.3 32.9L37.3 39.2C40.9 35.9 44 30.9 44 24C44 22.8 43.9 21.6 43.6 20.5Z"/>
+              </svg>
+            )}
+            Entrar com Google
           </button>
         </div>
       </div>
